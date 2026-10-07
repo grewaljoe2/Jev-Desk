@@ -20,6 +20,7 @@ from app.research.savip_pick_worker import SavipPickWorker
 from app.research.savip_shadow_lifecycle import SavipShadowEntryWorker,SavipShadowRiskWorker
 from app.providers.savip_risk_market import SavipRiskMarketProvider
 from app.providers.typesafe_jev import TypeSafeJevProvider
+from app.providers.savip_social import FreeExactXProvider
 from app.research.savip_jev_candidate import latest_chain_pass
 from app.research.savip_jev_evidence import build_evidence
 from app.research.savip_jev_adapter import run_typed_jev
@@ -37,9 +38,10 @@ dex_provider=DexScreenerProvider()
 savip_dossier_provider=SavipDossierProvider(provider)
 savip_chain_provider=SavipChainProvider()
 typesafe_jev=TypeSafeJevProvider()
+savip_x_provider=FreeExactXProvider()
 savip_jev_validation_worker=SavipJevValidationWorker(typesafe_jev)
 savip_pick_worker=SavipPickWorker(typesafe_jev)
-savip_jev_worker=SavipJevWorker(typesafe_jev,on_pass=savip_pick_worker.run_cycle)
+savip_jev_worker=SavipJevWorker(typesafe_jev,on_pass=savip_pick_worker.run_cycle,x_provider=savip_x_provider)
 savip_chain_worker=SavipChainWorker(savip_dossier_provider,savip_chain_provider,on_pass=savip_jev_worker.run_cycle)
 savip_dex_worker=SavipDexWorker(dex_provider,on_enriched=savip_chain_worker.run_cycle)
 savip_market_provider=SavipRiskMarketProvider()
