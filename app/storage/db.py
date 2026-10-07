@@ -14,6 +14,9 @@ ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFA
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS last_error TEXT;
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS timing_provenance TEXT NOT NULL DEFAULT 'legacy_pre_v061';
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS baseline_event_id BIGINT;
+ALTER TABLE outcome_jobs DROP CONSTRAINT IF EXISTS outcome_jobs_token_id_horizon_minutes_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_baseline_horizon ON outcome_jobs(baseline_event_id,horizon_minutes) WHERE baseline_event_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_legacy_token_horizon ON outcome_jobs(token_id,horizon_minutes) WHERE baseline_event_id IS NULL;
 """
 SQLITE_SCHEMA="""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at TEXT NOT NULL,event_type TEXT NOT NULL,token_id TEXT,arm TEXT,payload_json TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_events_token ON events(token_id);CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type,created_at);CREATE TABLE IF NOT EXISTS virtual_positions(id INTEGER PRIMARY KEY AUTOINCREMENT,token_id TEXT NOT NULL,arm TEXT NOT NULL,status TEXT NOT NULL,requested_size_usd REAL NOT NULL,filled_size_usd REAL NOT NULL DEFAULT 0,entry_price REAL,opened_at TEXT,closed_at TEXT,exit_price REAL,UNIQUE(token_id,arm,status));"""
 async def init_db():
@@ -35,7 +38,7 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None):
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         for h in HORIZONS:
-            await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT(token_id,horizon_minutes) DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
+            await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
 async def research_counts():
     if not settings.database_url:return {"storage":"sqlite","snapshots":0,"decisions":0,"outcomes":0,"pending":0}
     import psycopg
