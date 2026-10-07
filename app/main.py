@@ -21,7 +21,8 @@ async def health():
 
 @app.get("/status")
 async def status():
-    r=await research_counts()\n    return {"mode":"SHADOW","scanner":"RUNNING","provider":provider.__class__.__name__,"live_execution_enabled":False,"cycle_seconds":settings.cycle_seconds,"snapshots_logged":r["snapshots"],"decisions_logged":r["decisions"],"outcomes_logged":r["outcomes"],"outcomes_pending":r["pending"],"storage":r["storage"]}
+    r=await research_counts()
+    return {"mode":"SHADOW","scanner":"RUNNING","provider":provider.__class__.__name__,"live_execution_enabled":False,"cycle_seconds":settings.cycle_seconds,"snapshots_logged":r["snapshots"],"decisions_logged":r["decisions"],"outcomes_logged":r["outcomes"],"outcomes_pending":r["pending"],"storage":r["storage"]}
 
 @app.post("/run-once")
 async def run_once():
