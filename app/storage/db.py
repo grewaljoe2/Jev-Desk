@@ -86,12 +86,30 @@ async def mark_shadow_positions(token_id,price,observed_at,baseline_event_id=Non
                 await db.execute("UPDATE shadow_exit_arms SET peak_price=%s,last_price=%s,last_marked_at=%s WHERE id=%s",(peak,price,observed_at,arm_id))
 
 async def shadow_exit_summary():
+    """Per-policy forward evidence using actual observed exit prices; open P&L stays separate."""
     if not settings.database_url:return []
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT policy,count(*) FILTER(WHERE status='open') AS open,count(*) FILTER(WHERE status='closed') AS closed,COALESCE(sum(CASE WHEN status='closed' THEN 100.0*(exit_price/entry_price-1) ELSE 0 END),0) AS realized_pnl_usd FROM shadow_exit_arms GROUP BY policy ORDER BY policy")
-        return await cur.fetchall()
+        cur=await db.execute("""SELECT a.policy,
+          count(*) FILTER(WHERE a.status='open') AS open,
+          count(*) FILTER(WHERE a.status='closed') AS closed,
+          count(*) FILTER(WHERE a.status='closed' AND a.exit_price>a.entry_price) AS wins,
+          count(*) FILTER(WHERE a.status='closed' AND a.exit_price<=a.entry_price) AS losses,
+          COALESCE(sum(CASE WHEN a.status='closed' THEN 100.0*(a.exit_price/a.entry_price-1) ELSE 0 END),0) AS realized_pnl_usd,
+          COALESCE(sum(CASE WHEN a.status='open' AND a.last_price IS NOT NULL THEN 100.0*(a.last_price/a.entry_price-1) ELSE 0 END),0) AS unrealized_pnl_usd,
+          COALESCE(avg(CASE WHEN a.status='closed' THEN 100.0*(a.exit_price/a.entry_price-1) END),0) AS avg_return_pct,
+          COALESCE(sum(CASE WHEN a.status='closed' AND a.exit_price>a.entry_price THEN 100.0*(a.exit_price/a.entry_price-1) ELSE 0 END),0) AS gross_profit_usd,
+          COALESCE(-sum(CASE WHEN a.status='closed' AND a.exit_price<a.entry_price THEN 100.0*(a.exit_price/a.entry_price-1) ELSE 0 END),0) AS gross_loss_usd
+          FROM shadow_exit_arms a JOIN virtual_positions p ON p.id=a.position_id
+          WHERE p.provenance='forward_qualification_v1'
+          GROUP BY a.policy ORDER BY a.policy""")
+        rows=await cur.fetchall()
+        for r in rows:
+            gp=float(r["gross_profit_usd"] or 0);gl=float(r["gross_loss_usd"] or 0);closed=int(r["closed"] or 0)
+            r["win_rate_pct"]=(100.0*int(r["wins"] or 0)/closed) if closed else None
+            r["profit_factor"]=(gp/gl) if gl>0 else (None if gp==0 else "inf")
+        return rows
 
 async def shadow_positions_detail(limit=100):
     """Read-only shadow ledger. Legacy rows remain visible but are excluded from forward validation."""
