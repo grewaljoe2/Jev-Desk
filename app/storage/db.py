@@ -127,6 +127,14 @@ async def due_qualification_jobs(limit=12):
         cur=await db.execute("SELECT * FROM qualification_jobs WHERE status='pending' AND due_at<=NOW() ORDER BY due_at LIMIT %s",(limit,))
         return await cur.fetchall()
 
+async def qualification_pressure():
+    """Entry-critical queue pressure used to protect scarce provider calls."""
+    if not settings.database_url:return {"due":0,"due_soon":0,"oldest_late_seconds":0.0}
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT count(*) FILTER(WHERE status='pending' AND due_at<=NOW()),count(*) FILTER(WHERE status='pending' AND due_at<=NOW()+interval '90 seconds'),COALESCE(EXTRACT(EPOCH FROM (NOW()-min(due_at) FILTER(WHERE status='pending' AND due_at<=NOW()))),0) FROM qualification_jobs")
+        r=await cur.fetchone();return {"due":r[0],"due_soon":r[1],"oldest_late_seconds":float(r[2] or 0)}
+
 async def complete_qualification_job(job_id):
     if not settings.database_url:return
     import psycopg
