@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS virtual_positions(id BIGSERIAL PRIMARY KEY,token_id T
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS baseline_event_id BIGINT;
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_price DOUBLE PRECISION;
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_marked_at TIMESTAMPTZ;
+ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS provenance TEXT NOT NULL DEFAULT 'legacy_pre_forward';
 CREATE TABLE IF NOT EXISTS shadow_exit_arms(id BIGSERIAL PRIMARY KEY,position_id BIGINT NOT NULL,policy TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',entry_price DOUBLE PRECISION NOT NULL,opened_at TIMESTAMPTZ NOT NULL,peak_price DOUBLE PRECISION NOT NULL,exit_price DOUBLE PRECISION,closed_at TIMESTAMPTZ,exit_reason TEXT,last_price DOUBLE PRECISION,last_marked_at TIMESTAMPTZ,UNIQUE(position_id,policy));
 CREATE TABLE IF NOT EXISTS outcome_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,horizon_minutes INTEGER NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',UNIQUE(token_id,horizon_minutes));
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
@@ -57,7 +58,7 @@ async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
         async with db.transaction():
             cur=await db.execute("SELECT id FROM virtual_positions WHERE token_id=%s AND arm='reference' AND status='open' LIMIT 1",(snapshot.token_id,))
             if await cur.fetchone():return None
-            cur=await db.execute("INSERT INTO virtual_positions(token_id,arm,status,requested_size_usd,filled_size_usd,entry_price,opened_at) VALUES(%s,'reference','open',%s,%s,%s,%s) RETURNING id",(snapshot.token_id,notional_usd,notional_usd,snapshot.price_usd,snapshot.observed_at))
+            cur=await db.execute("INSERT INTO virtual_positions(token_id,arm,status,requested_size_usd,filled_size_usd,entry_price,opened_at,baseline_event_id,provenance) VALUES(%s,'reference','open',%s,%s,%s,%s,%s,'forward_qualification_v1') RETURNING id",(snapshot.token_id,notional_usd,notional_usd,snapshot.price_usd,snapshot.observed_at,baseline_event_id))
             position_id=(await cur.fetchone())[0]
             for policy in ('tp20_sl10_v1','trail15_after10_v1','time24h_v1'):
                 await db.execute("INSERT INTO shadow_exit_arms(position_id,policy,status,entry_price,opened_at,peak_price,last_price,last_marked_at) VALUES(%s,%s,'open',%s,%s,%s,%s,%s) ON CONFLICT(position_id,policy) DO NOTHING",(position_id,policy,snapshot.price_usd,snapshot.observed_at,snapshot.price_usd,snapshot.price_usd,snapshot.observed_at))
@@ -90,6 +91,20 @@ async def shadow_exit_summary():
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("SELECT policy,count(*) FILTER(WHERE status='open') AS open,count(*) FILTER(WHERE status='closed') AS closed,COALESCE(sum(CASE WHEN status='closed' THEN 100.0*(exit_price/entry_price-1) ELSE 0 END),0) AS realized_pnl_usd FROM shadow_exit_arms GROUP BY policy ORDER BY policy")
+        return await cur.fetchall()
+
+async def shadow_positions_detail(limit=100):
+    """Read-only shadow ledger. Legacy rows remain visible but are excluded from forward validation."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT p.id,p.token_id,p.arm,p.status,p.requested_size_usd,p.filled_size_usd,p.entry_price,p.opened_at,p.closed_at,p.exit_price,p.last_price,p.last_marked_at,p.baseline_event_id,p.provenance,
+          CASE WHEN p.status='open' AND p.entry_price>0 AND p.last_price IS NOT NULL THEN p.filled_size_usd*(p.last_price/p.entry_price-1)
+               WHEN p.status='closed' AND p.entry_price>0 AND p.exit_price IS NOT NULL THEN p.filled_size_usd*(p.exit_price/p.entry_price-1) ELSE 0 END AS pnl_usd,
+          COALESCE(jsonb_agg(jsonb_build_object('policy',a.policy,'status',a.status,'entry_price',a.entry_price,'peak_price',a.peak_price,'last_price',a.last_price,'exit_price',a.exit_price,'opened_at',a.opened_at,'closed_at',a.closed_at,'exit_reason',a.exit_reason)) FILTER(WHERE a.id IS NOT NULL),'[]'::jsonb) AS exit_arms
+          FROM virtual_positions p LEFT JOIN shadow_exit_arms a ON a.position_id=p.id
+          WHERE p.arm='reference' GROUP BY p.id ORDER BY p.opened_at DESC NULLS LAST,p.id DESC LIMIT %s""",(limit,))
         return await cur.fetchall()
 
 async def shadow_position_summary():
