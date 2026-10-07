@@ -6,8 +6,8 @@ from app.research.savip_chain_cut import evaluate_chain
 from app.core.config import settings
 
 class SavipChainWorker:
-    def __init__(self,dossier,sol_chain,seconds=900,cap=3):
-        self.dossier=dossier;self.sol_chain=sol_chain;self.seconds=seconds;self.cap=cap;self.task=None
+    def __init__(self,dossier,sol_chain,seconds=900,cap=3,on_pass=None):
+        self.dossier=dossier;self.sol_chain=sol_chain;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.task=None
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock()
     async def run_cycle(self):
         if self._cycle_lock.locked():return
@@ -29,7 +29,9 @@ class SavipChainWorker:
                     if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
-                if ok:self.last_passed+=1
+                if ok:
+                    self.last_passed+=1
+                    if self.on_pass:await self.on_pass()
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
