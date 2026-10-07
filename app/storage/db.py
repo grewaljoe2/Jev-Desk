@@ -143,6 +143,20 @@ async def shadow_exit_summary():
             r["profit_factor"]=(gp/gl) if gl>0 else (None if gp==0 else "inf")
         return rows
 
+async def fast_shadow_positions_detail(limit=200):
+    """Individual forward fast-entry positions, kept separate from the 15m control ledger."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT p.id,p.token_id,p.arm,p.status,p.filled_size_usd,p.entry_price,p.opened_at,p.last_price,p.last_marked_at,p.baseline_event_id,p.provenance,
+          CASE WHEN p.entry_price>0 AND p.last_price IS NOT NULL THEN p.filled_size_usd*(p.last_price/p.entry_price-1) ELSE 0 END AS hold_pnl_usd,
+          COALESCE(jsonb_agg(jsonb_build_object('policy',a.policy,'status',a.status,'entry_price',a.entry_price,'peak_price',a.peak_price,'last_price',a.last_price,'exit_price',a.exit_price,'opened_at',a.opened_at,'closed_at',a.closed_at,'exit_reason',a.exit_reason)) FILTER(WHERE a.id IS NOT NULL),'[]'::jsonb) AS exit_arms
+          FROM virtual_positions p LEFT JOIN shadow_exit_arms a ON a.position_id=p.id
+          WHERE p.provenance LIKE 'forward_fast_%'
+          GROUP BY p.id ORDER BY p.opened_at DESC,p.id DESC LIMIT %s""",(limit,))
+        return await cur.fetchall()
+
 async def shadow_positions_detail(limit=100):
     """Read-only shadow ledger. Legacy rows remain visible but are excluded from forward validation."""
     if not settings.database_url:return []
