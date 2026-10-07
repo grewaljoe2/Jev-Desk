@@ -51,7 +51,10 @@ async def replay_report():
     samples=await load_clean_replay_samples(500)
     report=run_replay_research(samples) if samples else {"calibration_count":0,"holdout_count":0,"calibration_leaderboard":[],"frozen_policy":None,"holdout":None}
     diag=replay_diagnostics(samples,report.get("frozen_policy")) if samples else None
-    q=qualification_diagnostics(samples)\n    ref=q.get("reference",{})\n    scoreable=int(ref.get("eligible",0))+int(ref.get("rejected",0))\n    return {"ok":True,"evidence":"forward_clean","sample_count":len(samples),"scoreable_sample_count":scoreable,"qualified_sample_count":int(ref.get("eligible",0)),"unscorable_sample_count":int(ref.get("unscorable",0)),"sufficient_for_strategy_conclusion":scoreable>=100,**report,"diagnostics":diag,"qualification":q,"live_execution_enabled":False}
+    q=qualification_diagnostics(samples)
+    ref=q.get("reference",{})
+    scoreable=int(ref.get("eligible",0))+int(ref.get("rejected",0))
+    return {"ok":True,"evidence":"forward_clean","sample_count":len(samples),"scoreable_sample_count":scoreable,"qualified_sample_count":int(ref.get("eligible",0)),"unscorable_sample_count":int(ref.get("unscorable",0)),"sufficient_for_strategy_conclusion":scoreable>=100,**report,"diagnostics":diag,"qualification":q,"live_execution_enabled":False}
 
 @app.get("/",response_class=HTMLResponse)
 async def dashboard():return HTMLResponse(DASHBOARD)
