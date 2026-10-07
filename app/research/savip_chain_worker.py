@@ -3,6 +3,7 @@ import asyncio
 from app.research.savip_trade_cut import exact_trade_cut
 from app.storage.db import savip_candidate_pool
 from app.research.savip_chain_cut import evaluate_chain
+from app.core.config import settings
 
 class SavipChainWorker:
     def __init__(self,dossier,sol_chain,seconds=900,cap=3):
@@ -22,10 +23,17 @@ class SavipChainWorker:
                     sf=await self.sol_chain.fetch("solana",row["address"])
                     if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
                 ok,reason=evaluate_chain(d)
+                await self._persist(row["token_id"],d,ok,reason)
                 if ok:self.last_passed+=1
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+    async def _persist(self,token_id,d,ok,reason):
+        if not settings.database_url:return
+        import psycopg,json
+        async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+            await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES(%s,%s,%s,%s::jsonb)",("SAVIP_CHAIN",token_id,"savip_reference",json.dumps({**d,"chain_pass":ok,"chain_reason":reason},default=str)))
+            await db.commit()
     async def loop(self):
         while True:
             try:await self.run_cycle()
