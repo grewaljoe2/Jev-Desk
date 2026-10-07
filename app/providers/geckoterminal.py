@@ -6,7 +6,7 @@ from app.core.models import TokenSnapshot
 
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
-    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
+    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
     async def _get(self,url,params=None):
         async with self._lock:
             wait=self._next_call_at-time.monotonic()
@@ -17,7 +17,10 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
                 self._next_call_at=max(self._next_call_at,time.monotonic()+60.0)
                 raise RuntimeError("provider_rate_limited_429")
             return r
+    def set_entry_pressure(self,active): self._entry_pressure=bool(active)
     async def discover(self):
+        if self._entry_pressure:
+            self.last_diagnostics={"skipped":"entry_pressure"};return []
         out=[];diag={}
         for network in self.NETWORKS:
             try:

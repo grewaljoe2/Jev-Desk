@@ -34,6 +34,7 @@ class QualificationWorker:
         while True:
             try:
                 jobs=await due_qualification_jobs(limit=120)
+                self.provider.set_entry_pressure(bool(jobs))
                 groups={}
                 for job in jobs:groups.setdefault(job["chain"],[]).append(job)
                 for chain,chain_jobs in groups.items():
@@ -47,6 +48,7 @@ class QualificationWorker:
                             for job in batch:await defer_qualification_job(job["id"],1 if "429" in msg else 2,msg)
                             if "429" in msg:break
             except Exception as e:print("QUALIFICATION_WORKER_ERROR",type(e).__name__,str(e)[:300],flush=True)
+            finally:self.provider.set_entry_pressure(False)
             await asyncio.sleep(self.seconds)
     def start(self):
         if not self.task or self.task.done():self.task=asyncio.create_task(self.loop())
