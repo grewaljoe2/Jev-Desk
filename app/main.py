@@ -14,6 +14,12 @@ from app.research.qualification_worker import QualificationWorker
 from app.research.savip_dex import SavipDexWorker
 from app.research.savip_trade_cut import exact_trade_cut
 from app.research.savip_chain_worker import SavipChainWorker
+from app.providers.typesafe_jev import TypeSafeJevProvider
+from app.research.savip_jev_candidate import latest_chain_pass
+from app.research.savip_jev_evidence import build_evidence
+from app.research.savip_jev_adapter import run_typed_jev
+from app.research.savip_jev_questions import QUESTION_SETS,RULES
+from app.storage.db import log_savip_jev
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel,savip_candidate_pool
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
 from app.research.replay_pipeline import run_replay_research
@@ -27,6 +33,7 @@ savip_dex_worker=SavipDexWorker(dex_provider)
 savip_dossier_provider=SavipDossierProvider()
 savip_chain_provider=SavipChainProvider()
 savip_chain_worker=SavipChainWorker(savip_dossier_provider,savip_chain_provider)
+typesafe_jev=TypeSafeJevProvider()
 scheduler=ShadowScheduler(provider,30)
 outcome_worker=OutcomeWorker(provider)
 qualification_worker=QualificationWorker(provider)
@@ -95,6 +102,15 @@ async def savip_shadow_data():
     survivors=funnel["free_cut_survivors"]
     trade=await exact_trade_cut(survivors)
     return {"ok":True,"mode":"savip_trade_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"trade_cut_survivor_count":len(trade["survivors"]),"trade_cut_kills":trade["kills"],"trade_cut_missing_fields":trade["missing_fields"],"trade_cut_survivors":trade["survivors"][:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":True,"dossier_enabled":True,"chain_cut_enabled":True,"chain_cut":{"checked_last_cycle":savip_chain_worker.last_checked,"passed_last_cycle":savip_chain_worker.last_passed,"kills":savip_chain_worker.last_kills,"last_error":savip_chain_worker.last_error},"jev_enabled":False,"pick_enabled":False,"dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
+
+@app.post("/savip-jev-validate-once")
+async def savip_jev_validate_once():
+    row=await latest_chain_pass()
+    if not row:return {"ok":False,"reason":"no_chain_pass_candidate","paid_call_made":False,"real_execution_enabled":False}
+    evidence=build_evidence(row["payload_json"])
+    result=await run_typed_jev(typesafe_jev,evidence,QUESTION_SETS,RULES)
+    await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
+    return {"ok":result.get("ok",False),"token_id":row["token_id"],"result":result,"paid_call_made":result.get("reason")!="jev_not_configured","pick_enabled":False,"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
