@@ -6,6 +6,7 @@ from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler,ingest_discovery
 from app.research.outcomes import OutcomeWorker
 from app.research.active_trades import ActiveTradeWorker
+from app.research.fast_entries import FastEntryWorker
 from app.research.qualification_worker import QualificationWorker
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
@@ -15,16 +16,18 @@ from app.research.qualification import qualification_diagnostics
 
 app=FastAPI(title=settings.app_name,version=settings.version)
 provider=GeckoTerminalDiscovery()
-scheduler=ShadowScheduler(provider,settings.cycle_seconds)
+scheduler=ShadowScheduler(provider,120)
 outcome_worker=OutcomeWorker(provider)
 qualification_worker=QualificationWorker(provider)
 active_trade_worker=ActiveTradeWorker(provider,seconds=15)
+fast_entry_worker=FastEntryWorker(provider,seconds=5)
 
 @app.on_event("startup")
 async def startup():
     await init_db()
     scheduler.start()
     qualification_worker.start()
+    fast_entry_worker.start()
     active_trade_worker.start()
     outcome_worker.start()
 
@@ -35,7 +38,7 @@ async def health():
 @app.get("/status")
 async def status():
     r=await research_counts()
-    return {"mode":"SHADOW","scanner":"RUNNING","provider":provider.__class__.__name__,"live_execution_enabled":False,"cycle_seconds":settings.cycle_seconds,"snapshots_logged":r["snapshots"],"decisions_logged":r["decisions"],"outcomes_logged":r["outcomes"],"outcomes_pending":r["pending"],"storage":r["storage"]}
+    return {"mode":"SHADOW","scanner":"RUNNING","provider":provider.__class__.__name__,"live_execution_enabled":False,"cycle_seconds":scheduler.seconds,"snapshots_logged":r["snapshots"],"decisions_logged":r["decisions"],"outcomes_logged":r["outcomes"],"outcomes_pending":r["pending"],"storage":r["storage"]}
 
 @app.post("/run-once")
 async def run_once():
