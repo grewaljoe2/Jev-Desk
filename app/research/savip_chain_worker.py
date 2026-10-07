@@ -1,6 +1,7 @@
 """Bounded Savip dossier/CHAIN worker. Shadow research only."""
 import asyncio
 import time
+from datetime import datetime, timezone
 from app.research.savip_trade_cut import exact_trade_cut
 from app.storage.db import savip_candidate_pool,open_savip_positions
 from app.research.savip_chain_cut import evaluate_chain
@@ -9,13 +10,19 @@ from app.core.config import settings
 class SavipChainWorker:
     def __init__(self,dossier,sol_chain,seconds=900,cap=3,on_pass=None):
         self.dossier=dossier;self.sol_chain=sol_chain;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.task=None
-        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock();self._next_dossier_retry_at=0.0
+        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock();self._next_dossier_retry_at=0.0;self.cycle_started_at=None;self.cycle_finished_at=None;self.cycle_running=False;self.last_candidate_results=[]
     async def run_cycle(self):
         if self._cycle_lock.locked():return
         async with self._cycle_lock:
             await self._run_cycle_locked()
     async def _run_cycle_locked(self):
-        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None
+        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self.last_candidate_results=[]
+        self.cycle_started_at=datetime.now(timezone.utc).isoformat();self.cycle_running=True
+        try:
+            await self._evaluate_cycle()
+        finally:
+            self.cycle_running=False;self.cycle_finished_at=datetime.now(timezone.utc).isoformat()
+    async def _evaluate_cycle(self):
         if await open_savip_positions():return
         funnel=await savip_candidate_pool(window_minutes=72*60)
         trade=await exact_trade_cut(funnel["free_cut_survivors"])
@@ -38,12 +45,14 @@ class SavipChainWorker:
                     if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
+                self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason})
                 if ok:
                     self.last_passed+=1
                     if self.on_pass:await self.on_pass()
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+                self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"error","reason":self.last_error})
                 if "provider_rate_limited_429" in str(e):
                     # GeckoTerminal is shared with discovery; avoid repeated
                     # dossier requests while its global 429 cooldown runs.
