@@ -123,7 +123,7 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
         JOIN LATERAL (
           SELECT e2.event_type,e2.created_at,e2.payload_json
           FROM events e2
-          WHERE e2.token_id=c.token_id AND e2.event_type IN ('DISCOVERY','SNAPSHOT','SAVIP_DEX')
+          WHERE e2.token_id=c.token_id AND e2.event_type IN ('DISCOVERY','SNAPSHOT')
           ORDER BY e2.created_at DESC LIMIT 1
         ) o ON TRUE
         ORDER BY c.discovered_at DESC LIMIT %s""",(window_minutes,limit))
