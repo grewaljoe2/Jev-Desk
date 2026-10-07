@@ -5,7 +5,7 @@ from app.providers.geckoterminal import GeckoTerminalDiscovery
 from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler
 from app.research.outcomes import OutcomeWorker
-from app.storage.db import init_db,recent_events,research_counts
+from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs
 
 app=FastAPI(title=settings.app_name,version=settings.version)
 provider=GeckoTerminalDiscovery()
@@ -36,6 +36,11 @@ async def run_once():
 
 @app.get("/events")
 async def events(limit:int=50):return await recent_events(min(max(limit,1),500))
+
+@app.get("/research-health")
+async def research_health():
+    r=await research_counts();due=await due_outcome_jobs(5)
+    return {"ok":True,"storage":r["storage"],"snapshots":r["snapshots"],"decisions":r["decisions"],"outcomes":r["outcomes"],"pending":r["pending"],"due_now":len(due),"live_execution_enabled":False}
 
 @app.get("/",response_class=HTMLResponse)
 async def dashboard():return HTMLResponse(DASHBOARD)
