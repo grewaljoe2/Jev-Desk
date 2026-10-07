@@ -4,6 +4,7 @@ import base64,struct,httpx
 class SavipChainProvider:
     SOL_RPC="https://api.mainnet-beta.solana.com"
     HONEYPOT="https://api.honeypot.is/v2/IsHoneypot"
+    TOP_HOLDERS="https://api.honeypot.is/v1/TopHolders"
     CHAIN_ID={"eth":1,"bsc":56,"base":8453}
     def __init__(self):self.client=httpx.AsyncClient(timeout=20,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.3"})
 
@@ -40,6 +41,9 @@ class SavipChainProvider:
 
     async def _evm(self,chain,address):
         r=await self.client.get(self.HONEYPOT,params={"address":address,"chainID":self.CHAIN_ID[chain]});r.raise_for_status();j=r.json()
+        h=await self.client.get(self.TOP_HOLDERS,params={"address":address,"chainID":self.CHAIN_ID[chain]});h.raise_for_status();hj=h.json()
         hp=(j.get("honeypotResult") or {}).get("isHoneypot")
         holders=(j.get("token") or {}).get("totalHolders")
-        return {"top_wallet_fraction":None,"top10_fraction":None,"holders":int(holders) if holders is not None else None,"authority_open":None,"honeypot":hp if chain=="bsc" else None,"source":"honeypot.is"}
+        total=int(hj.get("totalSupply") or 0);balances=[int(x.get("balance") or 0) for x in (hj.get("holders") or [])]
+        top=balances[0]/total if total and balances else None;top10=sum(balances[:10])/total if total else None
+        return {"top_wallet_fraction":top,"top10_fraction":top10,"holders":int(holders) if holders is not None else None,"authority_open":None,"honeypot":hp if chain=="bsc" else None,"source":"honeypot.is"}
