@@ -9,16 +9,16 @@ async def savip_dex_targets_72h(limit=25):
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("""WITH c AS (
-          SELECT DISTINCT ON(token_id) token_id,created_at
+          SELECT DISTINCT ON(token_id) token_id,created_at,payload_json
           FROM events WHERE event_type='DISCOVERY' AND created_at>=NOW()-interval '72 hours'
           ORDER BY token_id,created_at DESC
         )
-        SELECT c.token_id,o.payload_json->>'chain' chain,
-          o.payload_json->'raw'->>'pool_id' pool_id,o.payload_json
-        FROM c
+        SELECT d.token_id,o.payload_json->>'chain' chain,
+          COALESCE(o.payload_json->'raw'->>'pool_id',d.payload_json->'raw'->>'pool_id') pool_id,o.payload_json
+        FROM c d
         JOIN LATERAL (
           SELECT payload_json FROM events e
-          WHERE e.token_id=c.token_id AND e.event_type IN ('DISCOVERY','SNAPSHOT')
+          WHERE e.token_id=d.token_id AND e.event_type IN ('DISCOVERY','SNAPSHOT')
           ORDER BY e.created_at DESC LIMIT 1
         ) o ON TRUE
         WHERE CASE
@@ -29,7 +29,7 @@ async def savip_dex_targets_72h(limit=25):
           AND NULLIF(o.payload_json->>'volume_h24_usd','')::double precision >= %s
           AND NULLIF(o.payload_json->>'mcap_usd','')::double precision BETWEEN %s AND %s
           AND NULLIF(o.payload_json->>'liquidity_usd','')::double precision >= %s
-          AND o.payload_json->'raw'->>'pool_id' IS NOT NULL
-          AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=c.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '15 minutes')
-        ORDER BY c.created_at DESC LIMIT %s""",(HARD["min_age_minutes"],HARD["max_age_hours"]*60,HARD["min_volume_h24"],HARD["min_mcap_usd"],HARD["max_mcap_usd"],HARD["min_liquidity_usd"],limit))
+          AND COALESCE(o.payload_json->'raw'->>'pool_id',d.payload_json->'raw'->>'pool_id') IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '15 minutes')
+        ORDER BY d.created_at DESC LIMIT %s""",(HARD["min_age_minutes"],HARD["max_age_hours"]*60,HARD["min_volume_h24"],HARD["min_mcap_usd"],HARD["max_mcap_usd"],HARD["min_liquidity_usd"],limit))
         return await cur.fetchall()
