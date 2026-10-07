@@ -102,7 +102,11 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
         )
         SELECT c.discovery_event_id,c.token_id,c.discovered_at,
           o.payload_json->>'chain' AS chain,
-          NULLIF(o.payload_json->>'age_minutes','')::double precision AS age_minutes,
+          CASE
+            WHEN COALESCE(o.payload_json->'raw'->>'pool_created_at',o.payload_json->>'pool_created_at') IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (NOW()-COALESCE(o.payload_json->'raw'->>'pool_created_at',o.payload_json->>'pool_created_at')::timestamptz))/60.0
+            ELSE NULLIF(o.payload_json->>'age_minutes','')::double precision
+          END AS age_minutes,
           NULLIF(o.payload_json->>'price_usd','')::double precision AS price_usd,
           NULLIF(o.payload_json->>'liquidity_usd','')::double precision AS liquidity_usd,
           NULLIF(o.payload_json->>'volume_h24_usd','')::double precision AS volume_h24_usd,
