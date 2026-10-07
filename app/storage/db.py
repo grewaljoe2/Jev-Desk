@@ -135,6 +135,14 @@ async def qualification_pressure():
         cur=await db.execute("SELECT count(*) FILTER(WHERE status='pending' AND due_at<=NOW()),count(*) FILTER(WHERE status='pending' AND due_at<=NOW()+interval '90 seconds'),COALESCE(EXTRACT(EPOCH FROM (NOW()-min(due_at) FILTER(WHERE status='pending' AND due_at<=NOW()))),0) FROM qualification_jobs")
         r=await cur.fetchone();return {"due":r[0],"due_soon":r[1],"oldest_late_seconds":float(r[2] or 0)}
 
+async def qualification_health():
+    """Read-only lifecycle diagnostics for the >=15m entry queue."""
+    if not settings.database_url:return {"waiting":0,"due":0,"done":0,"retried":0,"oldest_late_seconds":0.0,"next_due_at":None}
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT count(*) FILTER(WHERE status='pending' AND due_at>NOW()),count(*) FILTER(WHERE status='pending' AND due_at<=NOW()),count(*) FILTER(WHERE status='done'),count(*) FILTER(WHERE attempts>0),COALESCE(EXTRACT(EPOCH FROM (NOW()-min(due_at) FILTER(WHERE status='pending' AND due_at<=NOW()))),0),min(due_at) FILTER(WHERE status='pending' AND due_at>NOW()) FROM qualification_jobs")
+        r=await cur.fetchone();return {"waiting":r[0],"due":r[1],"done":r[2],"retried":r[3],"oldest_late_seconds":float(r[4] or 0),"next_due_at":r[5]}
+
 async def complete_qualification_job(job_id):
     if not settings.database_url:return
     import psycopg
