@@ -5,11 +5,11 @@ from app.core.models import TokenSnapshot
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
     def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
-    async def _get(self,client,url,params=None):
+    async def _get(self,url,params=None):
         async with self._lock:
             wait=self._next_call_at-time.monotonic()
             if wait>0:await asyncio.sleep(wait)
-            r=await client.get(url,params=params)
+            r=await self._client.get(url,params=params)
             self._next_call_at=time.monotonic()+3.0
             if r.status_code==429:
                 self._next_call_at=max(self._next_call_at,time.monotonic()+60.0)
@@ -20,7 +20,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         async with httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6"}) as c:
             for network in self.NETWORKS:
                 try:
-                    r=await self._get(c,f"{self.BASE}/networks/{network}/new_pools",params={"page":1});diag[network]={"http":r.status_code,"bytes":len(r.content)};r.raise_for_status()
+                    r=await self._get(f"{self.BASE}/networks/{network}/new_pools",params={"page":1});diag[network]={"http":r.status_code,"bytes":len(r.content)};r.raise_for_status()
                     rows=r.json().get("data",[]);diag[network]["rows"]=len(rows)
                     for row in rows[:20]:
                         s=self._snapshot(network,row)
@@ -31,7 +31,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         pool_address=(pool_id or "").split("_",1)[-1]
         if not pool_address:return None
         async with httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6"}) as c:
-            r=await self._get(c,f"{self.BASE}/networks/{network}/pools/{pool_address}")
+            r=await self._get(f"{self.BASE}/networks/{network}/pools/{pool_address}")
             r.raise_for_status();row=r.json().get("data")
             return self._snapshot(network,row) if row else None
     def _snapshot(self,network,row):
