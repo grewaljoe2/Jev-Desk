@@ -108,6 +108,8 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
           NULLIF(o.payload_json->>'volume_h24_usd','')::double precision AS volume_h24_usd,
           NULLIF(o.payload_json->>'mcap_usd','')::double precision AS mcap_usd,
           NULLIF(o.payload_json->>'trades_h24','')::integer AS trades_h24,
+          NULLIF(o.payload_json->>'buys_h1','')::integer AS buys_h1,
+          NULLIF(o.payload_json->>'sells_h1','')::integer AS sells_h1,
           o.event_type AS fact_source,o.created_at AS facts_at
         FROM candidates c
         JOIN LATERAL (
@@ -118,7 +120,7 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
         ) o ON TRUE
         ORDER BY c.discovered_at DESC LIMIT %s""",(window_minutes,limit))
         rows=await cur.fetchall()
-    survivors=[];wait=[];kills={};missing={}
+    survivors=[];wait=[];kills={};missing={};trade_survivors=[];trade_kills={};trade_missing={}
     for r in rows:
         x=dict(r);age=x.get("age_minutes");liq=x.get("liquidity_usd");vol=x.get("volume_h24_usd");mc=x.get("mcap_usd")
         absent=[k for k,v in (("age_minutes",age),("liquidity_usd",liq),("volume_h24_usd",vol),("mcap_usd",mc)) if v is None]
@@ -135,8 +137,18 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
         elif mc>HARD["max_mcap_usd"]:reason="mcap_high"
         if reason=="wait_too_young":wait.append(x)
         elif reason:kills[reason]=kills.get(reason,0)+1
-        else:survivors.append(x)
-    return {"scanned":len(rows),"free_cut_survivors":survivors,"wait_too_young":wait,"kills":kills,"missing_fields":missing}
+        else:
+            survivors.append(x)
+            th=x.get("trades_h24");bh=x.get("buys_h1");sh=x.get("sells_h1")
+            absent_trade=[k for k,v in (("trades_h24",th),("buys_h1",bh),("sells_h1",sh)) if v is None]
+            if absent_trade:
+                trade_kills["missing_trade_fact"]=trade_kills.get("missing_trade_fact",0)+1
+                for k in absent_trade:trade_missing[k]=trade_missing.get(k,0)+1
+                x["missing_trade_fields"]=absent_trade
+            elif th<HARD["min_trades_h24"]:trade_kills["trades"]=trade_kills.get("trades",0)+1
+            elif sh==0 and bh>20:trade_kills["no_sells"]=trade_kills.get("no_sells",0)+1
+            else:trade_survivors.append(x)
+    return {"scanned":len(rows),"free_cut_survivors":survivors,"wait_too_young":wait,"kills":kills,"missing_fields":missing,"trade_cut_survivors":trade_survivors,"trade_cut_kills":trade_kills,"trade_cut_missing_fields":trade_missing}
 
 async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
     """Open one research-only position from a contemporaneous qualified snapshot. No broker/wallet action."""
