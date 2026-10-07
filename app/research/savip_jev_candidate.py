@@ -21,5 +21,5 @@ async def unjudged_chain_passes(limit:int=3):
         cur=await db.execute("""SELECT e.id AS chain_event_id,e.token_id,e.payload_json,e.created_at FROM events e
           LEFT JOIN savip_jev_claims c ON c.chain_event_id=e.id
           WHERE e.event_type='SAVIP_CHAIN' AND e.payload_json->>'chain_pass'='true' AND e.created_at>=NOW()-interval '20 minutes' AND c.chain_event_id IS NULL
-          ORDER BY e.created_at DESC LIMIT %s""",(limit,))
+          ORDER BY e.created_at ASC LIMIT %s""",(limit,))
         return [dict(r) for r in await cur.fetchall()]
