@@ -8,8 +8,12 @@ from app.core.config import settings
 class SavipChainWorker:
     def __init__(self,dossier,sol_chain,seconds=900,cap=3):
         self.dossier=dossier;self.sol_chain=sol_chain;self.seconds=seconds;self.cap=cap;self.task=None
-        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None
+        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock()
     async def run_cycle(self):
+        if self._cycle_lock.locked():return
+        async with self._cycle_lock:
+            await self._run_cycle_locked()
+    async def _run_cycle_locked(self):
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None
         if await open_savip_positions():return
         funnel=await savip_candidate_pool(window_minutes=72*60)
