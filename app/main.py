@@ -6,7 +6,7 @@ from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler,ingest_discovery
 from app.research.outcomes import OutcomeWorker
 from app.research.qualification_worker import QualificationWorker
-from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,shadow_position_summary,shadow_exit_summary
+from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_exit_summary
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
 from app.research.replay_pipeline import run_replay_research
 from app.research.replay_diagnostics import replay_diagnostics
@@ -61,9 +61,8 @@ async def replay_report():
 
 @app.get("/qualification-data")
 async def qualification_data():
-    samples=await load_qualification_replay_samples(500)
-    q=qualification_diagnostics(samples)
-    return {"ok":True,"sample_count":len(samples),"qualification":q,"live_execution_enabled":False}
+    totals=await qualification_decision_totals()
+    return {"ok":True,"sample_count":totals["sample_count"],"qualification":totals["qualification"],"live_execution_enabled":False}
 
 @app.get("/",response_class=HTMLResponse)
 async def dashboard():return HTMLResponse(DASHBOARD)

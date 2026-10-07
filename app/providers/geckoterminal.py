@@ -6,7 +6,7 @@ from app.core.models import TokenSnapshot
 
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
-    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
+    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._last_429_at=0.0;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
     async def _get(self,url,params=None):
         async with self._lock:
             wait=self._next_call_at-time.monotonic()
@@ -14,7 +14,15 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             r=await self._client.get(url,params=params)
             self._next_call_at=time.monotonic()+6.5
             if r.status_code==429:
-                self._next_call_at=max(self._next_call_at,time.monotonic()+60.0)
+                self._last_429_at=time.monotonic()
+                retry_after=60.0
+                raw=r.headers.get("Retry-After")
+                if raw:
+                    try: retry_after=max(retry_after,float(raw))
+                    except ValueError:
+                        try: retry_after=max(retry_after,(parsedate_to_datetime(raw)-datetime.now(timezone.utc)).total_seconds())
+                        except Exception: pass
+                self._next_call_at=max(self._next_call_at,time.monotonic()+max(1.0,retry_after))
                 raise RuntimeError("provider_rate_limited_429")
             return r
     def set_entry_pressure(self,active): self._entry_pressure=bool(active)
