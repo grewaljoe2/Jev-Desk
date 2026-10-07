@@ -35,6 +35,12 @@ class SavipDexWorker:
                         self.last_skipped_due_to_429=remaining
                         rate_limited=True
                         break
+                except RuntimeError as e:
+                    self.last_error=str(e)[:160]
+                    if str(e)=="dex_cooldown":
+                        self.last_skipped_due_to_429=remaining
+                        rate_limited=True
+                        break
                 except Exception as e:
                     self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
                 await asyncio.sleep(3.0)
