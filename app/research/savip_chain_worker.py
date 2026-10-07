@@ -21,11 +21,17 @@ class SavipChainWorker:
         for row in trade["survivors"][:self.cap]:
             self.last_checked+=1
             try:
-                d=await self.dossier.fetch(row["chain"],row["address"])
+                # Token IDs are canonical chain:address; the FREE/TRADE SQL projection
+                # does not guarantee a standalone address key.
+                token_id=row.get("token_id") or ""
+                address=row.get("address") or token_id.partition(":")[2]
+                if not address or not row.get("chain"):
+                    raise RuntimeError("missing_chain_address")
+                d=await self.dossier.fetch(row["chain"],address)
                 if not d: raise RuntimeError("missing_dossier")
                 d={**row,**d}
                 if row["chain"]=="solana":
-                    sf=await self.sol_chain.fetch("solana",row["address"])
+                    sf=await self.sol_chain.fetch("solana",address)
                     if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
