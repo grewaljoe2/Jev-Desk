@@ -49,6 +49,12 @@ async def research_counts():
         cur=await db.execute("SELECT count(*) FROM outcome_jobs WHERE status='pending'"); p=(await cur.fetchone())[0]
         cur=await db.execute("SELECT count(*) FROM outcome_jobs WHERE status='pending' AND due_at<=NOW() AND COALESCE(next_attempt_at,due_at)<=NOW()"); due=(await cur.fetchone())[0]
         return {"storage":"postgres","snapshots":a[0],"decisions":a[1],"outcomes":a[2],"pending":p,"due_now":due}
+async def outcome_quality():
+    if not settings.database_url:return {"clean_done":0,"legacy_done":0,"clean_pending":0,"clean_cohorts":0,"clean_complete_cohorts":0}
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT count(*) FILTER(WHERE status='done' AND timing_provenance='clean_v061'),count(*) FILTER(WHERE status='done' AND timing_provenance='legacy_pre_v061'),count(*) FILTER(WHERE status='pending' AND timing_provenance='clean_v061'),count(DISTINCT baseline_event_id) FILTER(WHERE baseline_event_id IS NOT NULL),count(DISTINCT baseline_event_id) FILTER(WHERE baseline_event_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM outcome_jobs p WHERE p.baseline_event_id=outcome_jobs.baseline_event_id AND p.status<>'done')) FROM outcome_jobs")
+        r=await cur.fetchone();return {"clean_done":r[0],"legacy_done":r[1],"clean_pending":r[2],"clean_cohorts":r[3],"clean_complete_cohorts":r[4]}
 async def recent_events(limit=50):
     if settings.database_url:
         import psycopg
