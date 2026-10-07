@@ -43,9 +43,11 @@ class SavipChainWorker:
                 if row["chain"]=="solana":
                     sf=await self.sol_chain.fetch("solana",address)
                     if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
+                missing=[key for key in ("holder_count","top_wallet_percent","top_10_percent","is_honeypot","mint_authority","freeze_authority") if d.get(key) is None]
+                d["missing_chain_fields"]=missing
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
-                self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason})
+                self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing})
                 if ok:
                     self.last_passed+=1
                     if self.on_pass:await self.on_pass()
