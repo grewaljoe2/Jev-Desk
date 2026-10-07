@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime,timezone
 from app.core.models import Event
 from app.strategy.filters import fast_fact_filter
-from app.storage.db import due_fast_entry_jobs,complete_fast_entry_job,defer_fast_entry_job,open_fast_shadow_position,log_event,qualification_pressure
+from app.storage.db import due_fast_entry_jobs,expire_stale_fast_entry_jobs,complete_fast_entry_job,defer_fast_entry_job,open_fast_shadow_position,log_event,qualification_pressure
 
 class FastEntryWorker:
     """Forward-only age-cohort experiment. 15m control remains untouched."""
@@ -14,6 +14,10 @@ class FastEntryWorker:
                 # Both entry workers use the provider's single paced request lock, so allowing
                 # Fast to enqueue work here preserves provider safety while giving expiring
                 # 1m/3m/5m/10m observations a chance to be measured.
+                # A named 1m/3m/5m/10m observation is useful only near its target time.
+                # Retire expired work before touching the provider, then process the
+                # still-valid queue by nearest expiry.
+                await expire_stale_fast_entry_jobs()
                 jobs=await due_fast_entry_jobs(30)
                 by_chain={}
                 for j in jobs:by_chain.setdefault(j["chain"],[]).append(j)
