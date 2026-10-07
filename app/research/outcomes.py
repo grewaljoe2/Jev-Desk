@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime,timezone
 from app.core.models import Event
-from app.storage.db import due_outcome_group,complete_outcome_job,defer_outcome_job,qualification_pressure
+from app.storage.db import due_outcome_group,complete_outcome_job,defer_outcome_job,qualification_pressure,mark_shadow_positions
 class OutcomeWorker:
     def __init__(self,provider,seconds=15):self.provider=provider;self.seconds=seconds;self.task=None
     async def loop(self):
@@ -27,6 +27,7 @@ class OutcomeWorker:
                                 if not snap:
                                     for job in group:await defer_outcome_job(job["id"],minutes=15,error="pool_not_available")
                                     continue
+                                await mark_shadow_positions(group[0]["token_id"],snap.price_usd,now,group[0].get("baseline_event_id"))
                                 for job in group:
                                     base=job["payload_json"];baseline=base.get("observed_at");actual=None
                                     if baseline:actual=(now-datetime.fromisoformat(str(baseline).replace("Z","+00:00"))).total_seconds()/60
