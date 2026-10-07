@@ -78,8 +78,9 @@ async def fast_entry_data():
 
 @app.get("/savip-shadow-data")
 async def savip_shadow_data():
-    candidates=await savip_candidate_pool()
-    return {"ok":True,"mode":"continuous_discovery_observation_only","candidate_source":"fresh_discovery_not_15m_control","candidate_count":len(candidates),"candidates":candidates,"pick_enabled":False,"real_execution_enabled":False}
+    funnel=await savip_candidate_pool()
+    survivors=funnel["free_cut_survivors"]
+    return {"ok":True,"mode":"savip_free_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"free_cut_survivors":survivors[:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":False,"dossier_enabled":False,"jev_enabled":False,"pick_enabled":False,"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
