@@ -8,6 +8,7 @@ from app.research.outcomes import OutcomeWorker
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality
 from app.research.replay_dataset import load_clean_replay_samples
 from app.research.replay_pipeline import run_replay_research
+from app.research.replay_diagnostics import replay_diagnostics
 
 app=FastAPI(title=settings.app_name,version=settings.version)
 provider=GeckoTerminalDiscovery()
@@ -48,7 +49,8 @@ async def research_health():
 async def replay_report():
     samples=await load_clean_replay_samples(500)
     report=run_replay_research(samples) if samples else {"calibration_count":0,"holdout_count":0,"calibration_leaderboard":[],"frozen_policy":None,"holdout":None}
-    return {"ok":True,"evidence":"forward_clean","sample_count":len(samples),"sufficient_for_strategy_conclusion":len(samples)>=100,**report,"live_execution_enabled":False}
+    diag=replay_diagnostics(samples,report.get("frozen_policy")) if samples else None
+    return {"ok":True,"evidence":"forward_clean","sample_count":len(samples),"sufficient_for_strategy_conclusion":len(samples)>=100,**report,"diagnostics":diag,"live_execution_enabled":False}
 
 @app.get("/",response_class=HTMLResponse)
 async def dashboard():return HTMLResponse(DASHBOARD)
