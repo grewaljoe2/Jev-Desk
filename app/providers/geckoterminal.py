@@ -12,7 +12,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             wait=self._next_call_at-time.monotonic()
             if wait>0:await asyncio.sleep(wait)
             r=await self._client.get(url,params=params)
-            self._next_call_at=time.monotonic()+4.0
+            self._next_call_at=time.monotonic()+6.5
             if r.status_code==429:
                 self._next_call_at=max(self._next_call_at,time.monotonic()+60.0)
                 raise RuntimeError("provider_rate_limited_429")
