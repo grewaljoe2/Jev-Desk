@@ -29,7 +29,7 @@ class QualificationWorker:
                     except Exception as e:
                         msg=str(e)[:300]
                         print("QUALIFICATION_RETRY",job["id"],job["token_id"],type(e).__name__,msg,flush=True)
-                        await defer_qualification_job(job["id"],2 if "429" not in msg else 5,msg)
+                        await defer_qualification_job(job["id"],2 if "429" not in msg else 1,msg)
                         if "429" in msg:break
             except Exception as e:print("QUALIFICATION_WORKER_ERROR",type(e).__name__,str(e)[:300],flush=True)
             await asyncio.sleep(self.seconds)
