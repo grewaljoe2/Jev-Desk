@@ -17,7 +17,7 @@ async def startup():
 
 @app.get("/health")
 async def health():
-    return {"ok":True,"version":settings.version,"shadow_only":True,"live_execution_enabled":False,"provider":provider.__class__.__name__}
+    return {"ok":True,"version":settings.version,"shadow_only":True,"live_execution_enabled":False,"provider":provider.__class__.__name__,"provider_diagnostics":provider.last_diagnostics}
 
 @app.get("/status")
 async def status():
@@ -29,7 +29,7 @@ async def run_once():
     out=[]
     for s in await provider.discover():
         d=await process_snapshot(s);out.append({"token":s.model_dump(mode="json"),"decisions":[x.model_dump(mode="json") for x in d]})
-    return {"count":len(out),"results":out}
+    return {"count":len(out),"provider_diagnostics":provider.last_diagnostics,"results":out}
 
 @app.get("/events")
 async def events(limit:int=50):return await recent_events(min(max(limit,1),500))
