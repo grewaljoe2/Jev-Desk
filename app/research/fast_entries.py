@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime,timezone
 from app.core.models import Event
 from app.strategy.filters import fast_fact_filter
-from app.storage.db import due_fast_entry_jobs,complete_fast_entry_job,defer_fast_entry_job,open_fast_shadow_position,log_event
+from app.storage.db import due_fast_entry_jobs,complete_fast_entry_job,defer_fast_entry_job,open_fast_shadow_position,log_event,qualification_pressure
 
 class FastEntryWorker:
     """Forward-only age-cohort experiment. 15m control remains untouched."""
@@ -10,6 +10,8 @@ class FastEntryWorker:
     async def loop(self):
         while True:
             try:
+                if (await qualification_pressure())["due"]:
+                    await asyncio.sleep(3);continue
                 jobs=await due_fast_entry_jobs(120)
                 by_chain={}
                 for j in jobs:by_chain.setdefault(j["chain"],[]).append(j)
