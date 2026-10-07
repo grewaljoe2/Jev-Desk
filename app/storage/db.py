@@ -93,11 +93,12 @@ async def active_shadow_targets():
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("""SELECT p.id,p.token_id,p.baseline_event_id,p.last_marked_at,
+        cur=await db.execute("""SELECT DISTINCT ON (p.token_id) p.id,p.token_id,p.baseline_event_id,p.last_marked_at,
           e.payload_json->>'chain' AS chain,e.payload_json->'raw'->>'pool_id' AS pool_id
           FROM virtual_positions p JOIN events e ON e.id=p.baseline_event_id
           WHERE p.status='open' AND (p.provenance='forward_qualification_v1' OR p.provenance LIKE 'forward_fast_%')
-          ORDER BY p.last_marked_at ASC NULLS FIRST""")
+            AND EXISTS (SELECT 1 FROM shadow_exit_arms a WHERE a.position_id=p.id AND a.status='open')
+          ORDER BY p.token_id,p.last_marked_at ASC NULLS FIRST""")
         return await cur.fetchall()
 
 async def shadow_exit_summary():
