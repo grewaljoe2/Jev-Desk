@@ -30,3 +30,14 @@ def sample_from_events(snapshot_payload:dict,outcome_payloads:list[dict]):
     result["evidence"]="forward_clean"
     result["outcome_points"]=len(points)
     return result
+
+
+async def load_clean_replay_samples(limit=500):
+    from app.storage.db import clean_replay_rows
+    rows=await clean_replay_rows(limit)
+    samples=[]
+    for row in rows:
+        outcomes=row.get("outcomes") or []
+        if outcomes:
+            samples.append(sample_from_events(row["snapshot_payload"],outcomes))
+    return samples
