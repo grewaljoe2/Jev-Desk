@@ -1,12 +1,13 @@
 import asyncio
-from app.storage.db import savip_dex_targets,log_savip_dex
+from app.storage.db import log_savip_dex
+from app.research.savip_targets import savip_dex_targets_72h
 
 class SavipDexWorker:
     def __init__(self,provider,seconds=900):
         self.provider=provider;self.seconds=seconds;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_enriched=0;self.last_error=None
-        for row in await savip_dex_targets(25):
+        for row in await savip_dex_targets_72h(25):
             self.last_checked+=1
             try:
                 facts=await self.provider.fetch_pair(row["chain"],row["pool_id"])
