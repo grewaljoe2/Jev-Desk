@@ -4,7 +4,7 @@ from app.storage.db import log_savip_dex
 from app.research.savip_targets import savip_dex_targets_72h
 
 class SavipDexWorker:
-    def __init__(self,provider,seconds=900,on_enriched=None):
+    def __init__(self,provider,seconds=180,on_enriched=None):
         self.provider=provider;self.seconds=seconds;self.on_enriched=on_enriched;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
     async def run_cycle(self):
         self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
