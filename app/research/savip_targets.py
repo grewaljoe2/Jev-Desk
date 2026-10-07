@@ -31,5 +31,5 @@ async def savip_dex_targets_72h(limit=25):
           AND NULLIF(o.payload_json->>'liquidity_usd','')::double precision >= %s
           AND COALESCE(o.payload_json->'raw'->>'pool_id',d.payload_json->'raw'->>'pool_id') IS NOT NULL
           AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '15 minutes')
-        ORDER BY d.created_at DESC LIMIT %s""",(HARD["min_age_minutes"],HARD["max_age_hours"]*60,HARD["min_volume_h24"],HARD["min_mcap_usd"],HARD["max_mcap_usd"],HARD["min_liquidity_usd"],limit))
+        ORDER BY CASE WHEN EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX') THEN 1 ELSE 0 END ASC, d.created_at DESC LIMIT %s""",(HARD["min_age_minutes"],HARD["max_age_hours"]*60,HARD["min_volume_h24"],HARD["min_mcap_usd"],HARD["max_mcap_usd"],HARD["min_liquidity_usd"],limit))
         return await cur.fetchall()
