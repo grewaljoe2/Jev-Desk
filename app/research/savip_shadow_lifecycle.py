@@ -9,6 +9,8 @@ class SavipShadowEntryWorker:
     def __init__(self,market_provider,seconds=60,bank_usd=1000.0):
         self.market_provider=market_provider;self.seconds=seconds;self.bank_usd=bank_usd;self.task=None;self.state="waiting";self.last_error=None
     async def run_cycle(self):
+        if await open_savip_positions():
+            self.state="position_held";return
         row=await latest_accepted_savip_pick()
         if not row or await savip_pick_already_opened(row["id"]):self.state="waiting";return
         p=row["payload_json"];evidence=(p.get("evidence") or {})
