@@ -6,7 +6,8 @@ from app.core.models import TokenSnapshot
 
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
-    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._last_429_at=0.0;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
+    DISCOVERY_SEQUENCE=("solana","bsc","solana","base","solana","bsc","solana","eth")
+    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._last_429_at=0.0;self._discovery_index=0;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
     async def _get(self,url,params=None):
         async with self._lock:
             wait=self._next_call_at-time.monotonic()
@@ -27,17 +28,20 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             return r
     def set_entry_pressure(self,active): self._entry_pressure=bool(active)
     async def discover(self):
+        """Spend one discovery call per tick using a fixed evidence-based chain allocation."""
         if self._entry_pressure:
             self.last_diagnostics={"skipped":"entry_pressure"};return []
-        out=[];diag={}
-        for network in self.NETWORKS:
-            try:
-                r=await self._get(f"{self.BASE}/networks/{network}/new_pools",params={"page":1});diag[network]={"http":r.status_code,"bytes":len(r.content)};r.raise_for_status()
-                rows=r.json().get("data",[]);diag[network]["rows"]=len(rows)
-                for row in rows[:20]:
-                    s=self._snapshot(network,row)
-                    if s:out.append(s)
-            except Exception as e:diag.setdefault(network,{})["error"]=f"{type(e).__name__}: {str(e)[:180]}"
+        network=self.DISCOVERY_SEQUENCE[self._discovery_index%len(self.DISCOVERY_SEQUENCE)]
+        slot=self._discovery_index%len(self.DISCOVERY_SEQUENCE)
+        self._discovery_index=(self._discovery_index+1)%len(self.DISCOVERY_SEQUENCE)
+        out=[];diag={"mode":"weighted_fast_v1","network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
+        try:
+            r=await self._get(f"{self.BASE}/networks/{network}/new_pools",params={"page":1});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
+            rows=r.json().get("data",[]);diag["rows"]=len(rows)
+            for row in rows[:20]:
+                s=self._snapshot(network,row)
+                if s:out.append(s)
+        except Exception as e:diag["error"]=f"{type(e).__name__}: {str(e)[:180]}"
         self.last_diagnostics=diag;return out
     async def fetch_pools(self,network,pool_ids):
         """Fetch up to 30 same-network pools in one public API request."""
