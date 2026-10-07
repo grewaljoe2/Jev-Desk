@@ -9,6 +9,9 @@ CREATE INDEX IF NOT EXISTS idx_events_token ON events(token_id);
 CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type,created_at);
 CREATE TABLE IF NOT EXISTS virtual_positions(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,arm TEXT NOT NULL,status TEXT NOT NULL,requested_size_usd DOUBLE PRECISION NOT NULL,filled_size_usd DOUBLE PRECISION NOT NULL DEFAULT 0,entry_price DOUBLE PRECISION,opened_at TIMESTAMPTZ,closed_at TIMESTAMPTZ,exit_price DOUBLE PRECISION,UNIQUE(token_id,arm,status));
 CREATE TABLE IF NOT EXISTS outcome_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,horizon_minutes INTEGER NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',UNIQUE(token_id,horizon_minutes));
+ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
+ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS last_error TEXT;
 """
 SQLITE_SCHEMA="""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at TEXT NOT NULL,event_type TEXT NOT NULL,token_id TEXT,arm TEXT,payload_json TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_events_token ON events(token_id);CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type,created_at);CREATE TABLE IF NOT EXISTS virtual_positions(id INTEGER PRIMARY KEY AUTOINCREMENT,token_id TEXT NOT NULL,arm TEXT NOT NULL,status TEXT NOT NULL,requested_size_usd REAL NOT NULL,filled_size_usd REAL NOT NULL DEFAULT 0,entry_price REAL,opened_at TEXT,closed_at TEXT,exit_price REAL,UNIQUE(token_id,arm,status));"""
 async def init_db():
@@ -51,13 +54,18 @@ async def due_outcome_jobs(limit=12):
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE token_id=j.token_id AND event_type='SNAPSHOT' ORDER BY id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() ORDER BY j.due_at LIMIT %s",(limit,))
+        cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE token_id=j.token_id AND event_type='SNAPSHOT' ORDER BY id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() AND COALESCE(j.next_attempt_at,j.due_at)<=NOW() ORDER BY j.due_at LIMIT %s",(limit,))
         return await cur.fetchall()
 async def complete_outcome_job(job_id,event):
-    await log_event(event)
+    if not settings.database_url:return
     import psycopg
-    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET status='done' WHERE id=%s",(job_id,))
+    payload=json.dumps(event.payload,default=str)
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        async with db.transaction():
+            cur=await db.execute("UPDATE outcome_jobs SET status='done',last_error=NULL WHERE id=%s AND status='pending' RETURNING id",(job_id,))
+            if not await cur.fetchone():return
+            await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(%s,%s,%s,%s,%s::jsonb)",(event.created_at,event.event_type,event.token_id,event.arm,payload))
 async def defer_outcome_job(job_id,minutes=5):
     if not settings.database_url:return
     import psycopg
-    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET due_at=NOW()+(%s * interval '1 minute') WHERE id=%s",(minutes,job_id))
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1 WHERE id=%s",(minutes,job_id))
