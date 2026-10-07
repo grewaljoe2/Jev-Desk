@@ -26,7 +26,7 @@ from app.research.savip_jev_evidence import build_evidence
 from app.research.savip_jev_adapter import run_typed_jev
 from app.research.savip_jev_questions import QUESTION_SETS,RULES
 from app.storage.db import log_savip_jev,claim_savip_jev,complete_savip_jev_claim
-from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel,savip_candidate_pool,savip_positions_detail
+from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel,savip_candidate_pool,savip_discovery_accounting,savip_positions_detail
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
 from app.research.replay_pipeline import run_replay_research
 from app.research.replay_diagnostics import replay_diagnostics
@@ -120,6 +120,10 @@ async def savip_shadow_data():
     survivors=funnel["free_cut_survivors"]
     trade=await exact_trade_cut(survivors)
     return {"ok":True,"mode":"savip_trade_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"trade_cut_survivor_count":len(trade["survivors"]),"trade_cut_kills":trade["kills"],"trade_cut_missing_fields":trade["missing_fields"],"trade_cut_survivors":trade["survivors"][:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":True,"dossier_enabled":True,"chain_cut_enabled":True,"chain_cut":{"checked_last_cycle":savip_chain_worker.last_checked,"passed_last_cycle":savip_chain_worker.last_passed,"kills":savip_chain_worker.last_kills,"last_error":savip_chain_worker.last_error},"savip_trades":await savip_positions_detail(25),"entry_state":savip_shadow_entry_worker.state,"risk_state":savip_shadow_risk_worker.state,"jev_enabled":typesafe_jev.configured,"jev_state":"armed_waiting","pick_enabled":True,"pick_state":"armed_waiting","dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
+
+@app.get("/savip-discovery-accounting")
+async def savip_discovery_accounting_data():
+    return {"ok":True,"discovery":await savip_discovery_accounting(),"shadow_only":True,"live_execution_enabled":False}
 
 @app.get("/savip-jev-ready")
 async def savip_jev_ready():
