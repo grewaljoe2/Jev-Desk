@@ -6,7 +6,7 @@ from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler
 from app.research.outcomes import OutcomeWorker
 from app.research.qualification_worker import QualificationWorker
-from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality
+from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health
 from app.research.replay_dataset import load_clean_replay_samples
 from app.research.replay_pipeline import run_replay_research
 from app.research.replay_diagnostics import replay_diagnostics
@@ -46,8 +46,8 @@ async def events(limit:int=50):return await recent_events(min(max(limit,1),500))
 
 @app.get("/research-health")
 async def research_health():
-    r=await research_counts();q=await outcome_quality();sq=await scoreable_snapshot_quality()
-    return {"ok":True,"storage":r["storage"],"snapshots":r["snapshots"],"decisions":r["decisions"],"outcomes":r["outcomes"],"pending":r["pending"],"due_now":r.get("due_now",0),"outcome_quality":q,"scoreable_snapshots":sq,"live_execution_enabled":False}
+    r=await research_counts();q=await outcome_quality();sq=await scoreable_snapshot_quality();qh=await qualification_health()
+    return {"ok":True,"storage":r["storage"],"snapshots":r["snapshots"],"decisions":r["decisions"],"outcomes":r["outcomes"],"pending":r["pending"],"due_now":r.get("due_now",0),"outcome_quality":q,"scoreable_snapshots":sq,"qualification_queue":qh,"live_execution_enabled":False}
 
 @app.get("/replay-report")
 async def replay_report():
