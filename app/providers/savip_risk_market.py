@@ -17,4 +17,4 @@ class SavipRiskMarketProvider:
         if not chain or not pool:return None
         x=await self.dex.fetch_pair(chain,pool)
         if not x or x.get("pair_found") is False:return None
-        return {"price_usd":x.get("price_usd"),"volume_6h":x.get("volume_h6_usd"),"volume_24h":x.get("volume_h24_usd"),"source":"dexscreener","pair_address":x.get("pair_address")}
+        return {"price_usd":x.get("price_usd"),"liquidity_usd":x.get("liquidity_usd"),"volume_6h":x.get("volume_h6_usd"),"volume_24h":x.get("volume_h24_usd"),"source":"dexscreener","pair_address":x.get("pair_address")}
