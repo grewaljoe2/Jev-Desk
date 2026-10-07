@@ -11,7 +11,8 @@ class SavipChainWorker:
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None
-        if await open_savip_positions():return\n        funnel=await savip_candidate_pool(window_minutes=72*60)
+        if await open_savip_positions():return
+        funnel=await savip_candidate_pool(window_minutes=72*60)
         trade=await exact_trade_cut(funnel["free_cut_survivors"])
         for row in trade["survivors"][:self.cap]:
             self.last_checked+=1
