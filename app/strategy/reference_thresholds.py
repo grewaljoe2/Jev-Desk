@@ -1,8 +1,36 @@
-"""Reference-only values from the supplied strategy guide. Not production settings."""
-REFERENCE_ONLY=True
-HARD={"min_age_minutes":15,"max_age_hours":72,"min_liquidity_usd":12000,"min_volume_h24":40000,"min_mcap_usd":60000,"max_mcap_usd":8000000,"min_trades_h24":150,"max_top_wallet":0.05,"max_top_10":0.60,"min_holders":80}
-DARK_TICKET_CUT=.40
-NO_SOCIAL_CUT=.60
-REFERENCE_MAX_BANK_FRACTION=.06
-REFERENCE_MAX_LIQUIDITY_FRACTION=.02
-REFERENCE_EXIT_VOLUME_RATIO=.20
+"""Frozen published Savip/Jev desk reference values. Shadow research only."""
+SAVIP_REFERENCE_VERSION="2026-09-23"
+HARD={
+ "min_age_minutes":15,"max_age_hours":72,
+ "min_liquidity_usd":12000,"min_volume_h24":40000,
+ "min_mcap_usd":60000,"max_mcap_usd":8000000,
+ "min_trades_h24":150,"max_top_wallet":0.05,
+ "max_top_10":0.60,"min_holders":80,
+}
+SOFT={
+ "concentration_is_exit_risk":("max",0.55),
+ "momentum_already_spent":("max",0.60),
+ "liquidity_fits_ticket":("min",0.60),
+ "account_is_the_project":("min",0.70),
+ "recycled_account":("max",0.50),
+ "audience_is_real":("min",0.45),
+ "effort":("min",1.0),
+ "dev_still_loaded":("max",0.55),
+ "sellable_by_evidence":("min",0.60),
+ "crowd_probability":("min",0.55),
+}
+PICK={"worth_trading_at_all":0.60,"winner_confidence":0.55}
+BUDGET={"cycle_seconds":900,"gt_calls_per_minute":10,"universe_gt_calls":6,"trade_cut_calls_per_cycle":25,"dossiers_per_cycle":3}
+SIZE={"max_bank_fraction":0.06,"max_liquidity_fraction":0.02,"dark_data_factor":0.40,"missing_x_factor":0.60}
+FILLS={"fee_rate":0.0045,"fee_floor_usd":0.95}
+RISK={"poll_seconds":300,"volume_ratio_close":0.20,"data_retries":2}
+BENCH_MINUTES={
+ "honeypot":100000,"authority_open":100000,"top_wallet":100000,"sell_side":100000,
+ "recycled_account":360,"account_is_the_project":360,
+ "top_10":90,"holders":90,"dev_still_loaded":90,"concentration_is_exit_risk":90,
+ "shape":25,"shape_weak":25,"momentum_already_spent":25,"liquidity_fits_ticket":25,
+ "liquidity":25,"volume":25,"trades":25,"mcap":25,"age":20,
+}
+DEFAULT_BENCH_MINUTES=45
+REJECT_SHAPES={"fading","one_buyer"}
+REJECT_SELL_SIDE={"flagged","suspicious"}
