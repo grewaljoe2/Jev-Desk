@@ -85,3 +85,47 @@ Authoritative current state after PRs #33-#36; this section supersedes older imp
 
 ## New-chat protocol
 Read this file first, then NEXT_CHAT.md, then inspect the current main branch and current deployment state. The code and current DB/deployment state outrank stale prose. Do not reset research, repeat rejected branches, blindly copy reference thresholds, or make the user reconstruct prior work. Continue from the first unfinished verified milestone. Update this file whenever architecture, benchmark, validation status or roadmap materially changes.
+
+
+## 2026-10-07 latest handoff — shadow lifecycle + deployment failure
+This section supersedes earlier live-state bullets where they conflict.
+
+### Last VERIFIED production
+- Render service `jev-desk`, service id `srv-db2sp7e7bikc73as8690`, workspace `tea-db2snq142hec73fp839g`.
+- Last verified LIVE commit is PR #46, `df762b8542b12caf4bab225133b143c6da040a7d`.
+- Deploy `dep-db319n49v7es73ak7ql0` completed LIVE at 2026-10-07 09:46:58Z. Startup completed and /, /status, /research-health and /qualification-data returned 200.
+- Production is SHADOW ONLY and real execution remains disabled.
+- #46 makes discovery yield while qualification batches are actively due. OutcomeWorker already yields when qualification is due/soon. This is intended to protect scarce GeckoTerminal free API capacity.
+- Provider 429s were still observed before #46; do not claim the rate-limit bottleneck is solved until post-#46 queue/log evidence proves it.
+
+### Forward shadow trading code
+- PR #43 introduced future-only research shadow entries. A genuine future Reference-qualified >=15m qualification snapshot opens a normalized $100 virtual position using the contemporaneous provider-observed price proxy. Existing earlier qualifiers are NOT retroactively filled. No wallet/broker action exists.
+- PR #47, commit `5c50ff7626591573776b051ab642d4e8f68eeeb5`, added mark-to-market updates by reusing OutcomeWorker observations, intentionally adding no provider calls. It adds last_price/last_marked_at and unrealized shadow P&L.
+- PR #48, commit `6b23252a21ccaa3b47a7334089b0d0142a126257`, added parallel research-only exit arms for future entries: `tp20_sl10_v1`, `trail15_after10_v1`, and `time24h_v1`. These are experiments sharing the same entry, not a selected live exit policy. Exit arms are marked only from existing outcome observations.
+- The primary virtual position is intentionally separate from experimental exit arms; do not silently treat an exit-arm result as the primary/live-style position close.
+- Real trading remains OFF. Do not add wallet keys, broker execution, or real-money sizing.
+
+### CURRENT FAILURE — fix before any more feature work
+- Deploy `dep-db31cvc9v7es73akiivg` for PR #48 FAILED (`update_failed`) at 2026-10-07 09:53:35Z. Build succeeded; application import/startup failed.
+- Exact failure is again malformed dashboard source in `app/main.py`, line 77: `SyntaxError: unmatched '}'`.
+- Render traceback shows the JS around `shadowpnl.textContent` was corrupted so the Python triple-quoted HTML closes in the middle of the JS and a duplicate tail follows. The log contains the broken shape `shadowpnl.textContent='... </html>\"\"\"+Number((sp.realized_pnl_usd||0)+(sp.unrealized_pnl_usd||0)).toFixed(2);...`.
+- This was introduced while PR #47 changed the dashboard P&L line. Do NOT keep doing fragile substring replacements inside the giant one-line DASHBOARD string.
+- Production should still be serving the previously verified #46 instance because Render rejected #48. Verify deploy state before assuming.
+- FIRST NEXT ACTION: repair `app/main.py` structurally, re-read the full relevant dashboard tail, and run a Python syntax/import check if possible before merging/deploying. Prefer rewriting the complete affected JS/DASHBOARD tail cleanly rather than another narrow quote-sensitive replacement. Then deploy and verify startup, /research-health, DB schema migration for shadow_exit_arms, and qualification health.
+- Do not claim PR #47/#48 features are live until a newer deploy than #46 is verified LIVE.
+
+### Research/queue state before this handoff
+- Recent mobile screenshots before #46 showed Reference/Python qualification increasing from Q6 to Q9 while checked increased 419 -> 521, so qualification was functioning but bursty.
+- At that time queue was roughly 51 waiting / 4 due / 521 checked and UI said 15-minute checks on schedule.
+- Outcomes increased roughly 299 -> 625 while outcome backlog still grew to ~5353 due / ~13780 pending.
+- Fresh pre-#46 logs showed GeckoTerminal 429s affecting both qualification and outcome batches. Preserve priority order: due qualification first; active/qualified shadow evidence next; qualified outcomes; sampled rejected controls; discovery/background last.
+- Do not loosen qualification thresholds to manufacture trades.
+
+### Important next engineering items after deployment repair
+1. Verify #47/#48 schema and lifecycle in production with a future genuine qualifier; never fabricate an old entry.
+2. Add explicit API/UI detail for open shadow positions and the three exit arms (entry/current/exit/P&L/reason) once lifecycle is proven.
+3. Fix qualification replay's current 500-sample cap using aggregation/pagination rather than silently truncating strategy evidence.
+4. Deal with the old ~13k outcome backlog using an explicit versioned terminal/superseded policy for low-value rejected horizons; never delete completed evidence.
+5. Add exact decision provenance (baseline_event_id/qualification_job_id) rather than token-only qualified-priority joins.
+6. Harden qualification idempotency/transactionality and scheduler exception survival.
+7. Historical backtesting remains desired but not yet implemented; keep it strictly separate from untouched forward evidence and never use current fields as historical point-in-time facts.
