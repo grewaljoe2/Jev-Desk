@@ -17,6 +17,8 @@ ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS baseline_event_id BIGINT;
 ALTER TABLE outcome_jobs DROP CONSTRAINT IF EXISTS outcome_jobs_token_id_horizon_minutes_key;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_baseline_horizon ON outcome_jobs(baseline_event_id,horizon_minutes) WHERE baseline_event_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_legacy_token_horizon ON outcome_jobs(token_id,horizon_minutes) WHERE baseline_event_id IS NULL;
+CREATE TABLE IF NOT EXISTS qualification_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,chain TEXT NOT NULL,pool_id TEXT NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT,completed_at TIMESTAMPTZ,UNIQUE(chain,pool_id));
+CREATE INDEX IF NOT EXISTS idx_qualification_jobs_due ON qualification_jobs(status,due_at);
 """
 SQLITE_SCHEMA="""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at TEXT NOT NULL,event_type TEXT NOT NULL,token_id TEXT,arm TEXT,payload_json TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_events_token ON events(token_id);CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type,created_at);CREATE TABLE IF NOT EXISTS virtual_positions(id INTEGER PRIMARY KEY AUTOINCREMENT,token_id TEXT NOT NULL,arm TEXT NOT NULL,status TEXT NOT NULL,requested_size_usd REAL NOT NULL,filled_size_usd REAL NOT NULL DEFAULT 0,entry_price REAL,opened_at TEXT,closed_at TEXT,exit_price REAL,UNIQUE(token_id,arm,status));"""
 async def init_db():
@@ -110,3 +112,29 @@ async def scoreable_snapshot_quality():
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         cur=await db.execute("SELECT count(*) FILTER(WHERE payload_json->>'age_minutes' IS NOT NULL),count(*) FILTER(WHERE payload_json->>'age_minutes' IS NULL),max(created_at) FILTER(WHERE payload_json->>'age_minutes' IS NOT NULL) FROM events WHERE event_type='SNAPSHOT'")
         r=await cur.fetchone();return {"with_age":r[0],"missing_age":r[1],"latest_with_age":r[2].isoformat() if r[2] else None}
+
+async def schedule_qualification(token_id,chain,pool_id,due_at):
+    if not settings.database_url or not pool_id:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("INSERT INTO qualification_jobs(token_id,chain,pool_id,due_at,status) VALUES(%s,%s,%s,%s,'pending') ON CONFLICT(chain,pool_id) DO NOTHING",(token_id,chain,pool_id,due_at))
+
+async def due_qualification_jobs(limit=12):
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("SELECT * FROM qualification_jobs WHERE status='pending' AND due_at<=NOW() ORDER BY due_at LIMIT %s",(limit,))
+        return await cur.fetchall()
+
+async def complete_qualification_job(job_id):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("UPDATE qualification_jobs SET status='done',completed_at=NOW(),last_error=NULL WHERE id=%s AND status='pending'",(job_id,))
+
+async def defer_qualification_job(job_id,minutes=2,error=None):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("UPDATE qualification_jobs SET due_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s AND status='pending'",(minutes,error,job_id))
