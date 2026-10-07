@@ -62,8 +62,8 @@ async def due_outcome_group(limit=4):
     for job in jobs:
         base=job["payload_json"];pool_id=(base.get("raw") or {}).get("pool_id");key=(base.get("chain"),pool_id)
         if not pool_id:continue
+        if key not in groups and len(groups)>=limit:continue
         groups.setdefault(key,[]).append(job)
-        if len(groups)>=limit:break
     return list(groups.values())
 async def complete_outcome_job(job_id,event):
     if not settings.database_url:return
