@@ -173,3 +173,17 @@ This section supersedes the stale deployment-failure state above where it confli
 
 ### 2026-10-07 — Fresh-first outcome scheduling
 Production policy changed so fresh 1m/3m/5m/10m and 15m entry observations outrank historical outcome traffic. Historical outcome checks are spare-capacity only; stale point-in-time checks are retained as missed rather than fetched late, and remaining usable historical checks are newest-first. Real execution remains disabled.
+
+
+### 2026-10-07 — Fresh-first production deployment verified
+- Fresh-token scheduling policy from PR #70 is now in production. The policy protects fresh 1m/3m/5m/10m Fast entry windows and the 15m control before background historical outcomes; active forward positions remain higher value than background outcome replay.
+- Historical outcome selection is newest-first rather than oldest-first. Stale point-in-time historical jobs are marked `missed` with `missed_observation_window` instead of spending provider requests and pretending late observations were on time. The expiry tolerance scales at 20% of requested horizon, minimum 5 minutes and maximum 60 minutes.
+- No entry thresholds changed. Real execution remains disabled / shadow only.
+- PR #70 squash merge: `167d0752c968debb8bb98866b8f54e95901a0428`.
+- Render's normal GitHub commit sync failed to create a deployment even though service configuration was correct (repo grewaljoe2/Jev-Desk, branch main, autoDeploy=yes, trigger=commit). A fresh documentation commit/PR #71 produced main commit `13f035f6f1958a6171315c1e5777fc54f76b3864`.
+- To force Render to consume current main without changing trading behavior or paid infrastructure, environment variable `JEV_DEPLOY_SYNC` was merged/set to the current main commit SHA. Render reported this triggered deployment `dep-db33kjflk1mc739aq29g`.
+- Deployment `dep-db33kjflk1mc739aq29g` finished LIVE at 2026-10-07T12:26:26.763589Z on commit `13f035f6f1958a6171315c1e5777fc54f76b3864`. Therefore the fresh-first #70 code is now live.
+- If future Render auto-deploy again stalls behind GitHub main, first verify main/service branch; an innocuous merged main commit plus updating `JEV_DEPLOY_SYNC` can force a deployment without touching strategy behavior. Do not claim deployed until get_deploy/list_deploys reports the intended main commit live.
+
+### Next-session priority
+Verify production behavior after the fresh-first deployment: Fast/15m timing lateness, 429 frequency, discovery continuity, active-position marking, and whether the historical due backlog falls as stale jobs become missed. Do not change filters merely to manufacture Fast trades. If provider contention remains, continue the planned centralized shared REST observation/batching architecture rather than returning to per-worker sleep/priority patches. Keep 15m control alive and real trading OFF.
