@@ -1,6 +1,6 @@
 from app.core.models import Event
 from app.strategy.arms import evaluate_all
-from app.storage.db import log_event,schedule_outcomes
+from app.storage.db import log_event,schedule_outcomes,open_shadow_position
 
 async def process_snapshot(snapshot):
     baseline_event_id=await log_event(Event(event_type="SNAPSHOT",token_id=snapshot.token_id,payload=snapshot.model_dump(mode="json")))
@@ -14,4 +14,6 @@ async def process_snapshot(snapshot):
     is_qualification=bool((snapshot.raw or {}).get("qualification_job_id"))
     horizons=None if qualified or not is_qualification else (15,60,360,1440,4320)
     await schedule_outcomes(snapshot.token_id,snapshot.observed_at,baseline_event_id,force=is_qualification,horizons=horizons)
+    if is_qualification and qualified:
+        await open_shadow_position(snapshot,baseline_event_id)
     return decisions
