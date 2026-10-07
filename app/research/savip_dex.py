@@ -3,8 +3,8 @@ from app.storage.db import log_savip_dex
 from app.research.savip_targets import savip_dex_targets_72h
 
 class SavipDexWorker:
-    def __init__(self,provider,seconds=900):
-        self.provider=provider;self.seconds=seconds;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None
+    def __init__(self,provider,seconds=900,on_enriched=None):
+        self.provider=provider;self.seconds=seconds;self.on_enriched=on_enriched;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_enriched=0;self.last_error=None
         for row in await savip_dex_targets_72h(25):
@@ -13,6 +13,7 @@ class SavipDexWorker:
                 facts=await self.provider.fetch_pair(row["chain"],row["pool_id"])
                 if facts:
                     await log_savip_dex(row["token_id"],row["payload_json"],facts);self.last_enriched+=1
+                    if self.on_enriched:await self.on_enriched()
             except Exception as e:self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
     async def loop(self):
         while True:
