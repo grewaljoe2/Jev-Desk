@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime,timezone
 from app.core.models import Event
 from app.storage.db import due_outcome_jobs,complete_outcome_job,defer_outcome_job
 class OutcomeWorker:
@@ -11,10 +12,16 @@ class OutcomeWorker:
                         base=job["payload_json"];chain=base.get("chain");pool_id=(base.get("raw") or {}).get("pool_id")
                         snap=await self.provider.fetch_pool(chain,pool_id)
                         if not snap:await defer_outcome_job(job["id"]);continue
-                        payload={"requested_horizon_minutes":job["horizon_minutes"],"due_at":job["due_at"],"observation":snap.model_dump(mode="json")}
+                        now=datetime.now(timezone.utc);baseline=base.get("observed_at")
+                        actual=None
+                        if baseline:
+                            actual=(now-datetime.fromisoformat(str(baseline).replace("Z","+00:00"))).total_seconds()/60
+                        payload={"requested_horizon_minutes":job["horizon_minutes"],"actual_elapsed_minutes":actual,"scheduled_due_at":job["due_at"],"observed_at":now,"observation":snap.model_dump(mode="json")}
                         await complete_outcome_job(job["id"],Event(event_type="OUTCOME",token_id=job["token_id"],payload=payload))
-                    except Exception:await defer_outcome_job(job["id"])
-            except Exception:pass
+                    except Exception:
+                        await defer_outcome_job(job["id"])
+            except Exception:
+                pass
             await asyncio.sleep(self.seconds)
     def start(self):
-        if not self.task:self.task=asyncio.create_task(self.loop())
+        if not self.task or self.task.done():self.task=asyncio.create_task(self.loop())
