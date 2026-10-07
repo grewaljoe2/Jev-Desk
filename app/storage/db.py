@@ -621,7 +621,7 @@ async def claim_savip_jev(chain_event_id:int,token_id:str):
     if not settings.database_url:return False
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        cur=await db.execute("INSERT INTO savip_jev_claims(chain_event_id,token_id) VALUES(%s,%s) ON CONFLICT(chain_event_id) DO NOTHING RETURNING chain_event_id",(chain_event_id,token_id))
+        cur=await db.execute("INSERT INTO savip_jev_claims(chain_event_id,token_id) VALUES(%s,%s) ON CONFLICT(chain_event_id) DO UPDATE SET status='claimed',completed_at=NULL WHERE savip_jev_claims.status='failed' RETURNING chain_event_id",(chain_event_id,token_id))
         row=await cur.fetchone();await db.commit();return bool(row)
 
 async def complete_savip_jev_claim(chain_event_id:int,status:str):
