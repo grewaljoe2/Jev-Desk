@@ -12,7 +12,9 @@ class OutcomeWorker:
                     try:
                         base=job["payload_json"];chain=base.get("chain");pool_id=(base.get("raw") or {}).get("pool_id")
                         snap=await self.provider.fetch_pool(chain,pool_id)
-                        if not snap:await defer_outcome_job(job["id"]);continue
+                        if not snap:
+                            for due_job in group:await defer_outcome_job(due_job["id"],error="pool_not_available")
+                            continue
                         now=datetime.now(timezone.utc);baseline=base.get("observed_at")
                         actual=None
                         if baseline:
@@ -26,7 +28,7 @@ class OutcomeWorker:
                     except Exception as e:
                         msg=str(e)[:300]
                         print("OUTCOME_RETRY",job["id"],job["token_id"],type(e).__name__,msg,flush=True)
-                        await defer_outcome_job(job["id"],minutes=15 if "429" in msg else 5,error=msg)
+                        for due_job in group:await defer_outcome_job(due_job["id"],minutes=15 if "429" in msg else 5,error=msg)
                         if "429" in msg:
                             await asyncio.sleep(60)
                             break
