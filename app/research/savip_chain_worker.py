@@ -33,7 +33,7 @@ class SavipChainWorker:
         if not settings.database_url:return
         import psycopg,json
         async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-            await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES(%s,%s,%s,%s::jsonb)",("SAVIP_CHAIN",token_id,"savip_reference",json.dumps({**d,"chain_pass":ok,"chain_reason":reason},default=str)))
+            await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES(%s,%s,%s,%s::jsonb,CURRENT_TIMESTAMP)",("SAVIP_CHAIN",token_id,"savip_reference",json.dumps({**d,"chain_pass":ok,"chain_reason":reason},default=str)))
             await db.commit()
     async def loop(self):
         while True:
