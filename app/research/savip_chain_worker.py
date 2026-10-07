@@ -51,7 +51,7 @@ class SavipChainWorker:
                 d["missing_chain_fields"]=missing
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
-                self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing})
+                self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing,"top_10_percent":d.get("top_10_percent"),"holder_count":d.get("holder_count"),"top_wallet_percent":d.get("top_wallet_percent"),"top_10_limit_percent":60.0,"dossier_source":d.get("source")})
                 if ok:
                     self.last_passed+=1
                     if self.on_pass:await self.on_pass()
