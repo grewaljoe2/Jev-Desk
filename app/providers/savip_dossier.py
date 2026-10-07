@@ -1,27 +1,17 @@
 """Savip dossier facts matching the published collector. Shadow research only."""
-import asyncio
 import httpx
-import time
 
 class SavipDossierProvider:
     GT="https://api.geckoterminal.com/api/v2"
     NET={"solana":"solana","bsc":"bsc","base":"base","eth":"eth"}
-    def __init__(self):
+    def __init__(self,gt_provider=None):
         self.client=httpx.AsyncClient(timeout=20,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.3"})
-        self._lock=asyncio.Lock();self._next_gt_at=0.0
+        self.gt_provider=gt_provider
     async def fetch(self,chain,address):
         net=self.NET.get(chain)
         if not net:return None
-        async with self._lock:
-            wait=max(0.0,self._next_gt_at-time.monotonic())
-            if wait:
-                await asyncio.sleep(wait)
-            r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info")
-            self._next_gt_at=time.monotonic()+6.2
-            if r.status_code==429:
-                await asyncio.sleep(12)
-                r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info")
-                self._next_gt_at=time.monotonic()+6.2
+        url=f"{self.GT}/networks/{net}/tokens/{address}/info"
+        r=await self.gt_provider._get(url) if self.gt_provider else await self.client.get(url)
         r.raise_for_status()
         a=((r.json().get("data") or {}).get("attributes") or {})
         holders=a.get("holders") or {};dist=holders.get("distribution_percentage") or {}
