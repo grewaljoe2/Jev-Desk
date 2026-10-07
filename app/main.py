@@ -4,16 +4,19 @@ from app.core.config import settings
 from app.providers.geckoterminal import GeckoTerminalDiscovery
 from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler
+from app.research.outcomes import OutcomeWorker
 from app.storage.db import init_db,recent_events,research_counts
 
 app=FastAPI(title=settings.app_name,version=settings.version)
 provider=GeckoTerminalDiscovery()
 scheduler=ShadowScheduler(provider,settings.cycle_seconds)
+outcome_worker=OutcomeWorker(provider)
 
 @app.on_event("startup")
 async def startup():
     await init_db()
     scheduler.start()
+    outcome_worker.start()
 
 @app.get("/health")
 async def health():
