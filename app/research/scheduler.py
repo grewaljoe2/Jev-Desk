@@ -14,9 +14,8 @@ async def ingest_discovery(snapshot):
         await schedule_qualification(snapshot.token_id,snapshot.chain,pool_id,now+timedelta(minutes=remaining))
         # Separate forward experiment: only schedule a cohort if discovery occurred before its target age.
         # This prevents a late discovery from masquerading as a 1m/3m/5m/10m entry.
-        for cohort in (1,3,5,10):
-            if snapshot.age_minutes <= cohort:
-                await schedule_fast_entry(snapshot.token_id,snapshot.chain,pool_id,cohort,now+timedelta(minutes=max(0.0,cohort-snapshot.age_minutes)))
+        # Legacy 1m/3m/5m/10m research is paused while Savip is prioritized.
+        # Do not add new fast-entry jobs to the historical backlog.
         scheduled=True
     return {"token_id":snapshot.token_id,"age_minutes":snapshot.age_minutes,"scheduled":scheduled}
 
