@@ -53,6 +53,9 @@ class SavipChainWorker:
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
                 self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"error","reason":self.last_error})
+                if "solana_rpc_rate_limited_429" in str(e) or "solana_rpc_cooldown_429" in str(e):
+                    # Keep processing other chains; Solana RPC is cooling down.
+                    continue
                 if "provider_rate_limited_429" in str(e):
                     # GeckoTerminal is shared with discovery; avoid repeated
                     # dossier requests while its global 429 cooldown runs.
