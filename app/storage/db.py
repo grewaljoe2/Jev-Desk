@@ -123,7 +123,7 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
         JOIN LATERAL (
           SELECT e2.event_type,e2.created_at,e2.payload_json
           FROM events e2
-          WHERE e2.token_id=c.token_id AND e2.event_type IN ('DISCOVERY','SNAPSHOT','SAVIP_DEX')
+          WHERE e2.token_id=c.token_id AND e2.event_type IN ('DISCOVERY','SNAPSHOT')
           ORDER BY e2.created_at DESC LIMIT 1
         ) o ON TRUE
         ORDER BY c.discovered_at DESC LIMIT %s""",(window_minutes,limit))
@@ -602,3 +602,13 @@ async def defer_qualification_job(job_id,minutes=2,error=None):
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("UPDATE qualification_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s AND status='pending'",(minutes,error,job_id))
+
+
+async def log_savip_jev(token_id,result,evidence):
+    """Persist validated typed Jev output plus the exact evidence packet."""
+    if not settings.database_url:return
+    import psycopg
+    payload=json.dumps({"result":result,"evidence":evidence},default=str)
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_JEV',%s,'savip_reference',%s::jsonb)",(token_id,payload))
+        await db.commit()
