@@ -101,6 +101,22 @@ async def active_shadow_targets():
           ORDER BY p.token_id,p.last_marked_at ASC NULLS FIRST""")
         return await cur.fetchall()
 
+async def fast_entry_summary():
+    if not settings.database_url:return {"jobs":{},"cohorts":[]}
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("SELECT cohort_minutes,count(*) FILTER(WHERE status='pending') AS pending,count(*) FILTER(WHERE status='done') AS checked FROM fast_entry_jobs GROUP BY cohort_minutes ORDER BY cohort_minutes")
+        jobs=await cur.fetchall()
+        cur=await db.execute("""SELECT regexp_replace(p.arm,'[^0-9]','','g')::int AS cohort_minutes,a.policy,
+          count(*) AS positions,count(*) FILTER(WHERE a.status='closed') AS closed,
+          count(*) FILTER(WHERE a.status='closed' AND a.exit_price>a.entry_price) AS wins,
+          COALESCE(sum(CASE WHEN a.status='closed' THEN 100.0*(a.exit_price/a.entry_price-1) ELSE 0 END),0) AS realized_pnl_usd
+          FROM virtual_positions p JOIN shadow_exit_arms a ON a.position_id=p.id
+          WHERE p.provenance LIKE 'forward_fast_%'
+          GROUP BY cohort_minutes,a.policy ORDER BY cohort_minutes,a.policy""")
+        return {"jobs":jobs,"cohorts":await cur.fetchall()}
+
 async def shadow_exit_summary():
     """Per-policy forward evidence using actual observed exit prices; open P&L stays separate."""
     if not settings.database_url:return []
