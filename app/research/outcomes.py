@@ -1,13 +1,16 @@
 import asyncio
 from datetime import datetime,timezone
 from app.core.models import Event
-from app.storage.db import due_outcome_group,complete_outcome_job,defer_outcome_job,qualification_pressure,mark_shadow_positions
+from app.storage.db import due_outcome_group,complete_outcome_job,defer_outcome_job,qualification_pressure,mark_shadow_positions,active_shadow_targets
 class OutcomeWorker:
     def __init__(self,provider,seconds=15):self.provider=provider;self.seconds=seconds;self.task=None
     async def loop(self):
         while True:
             try:
                 if (await qualification_pressure())["due_soon"]:
+                    await asyncio.sleep(5);continue
+                # Open forward positions outrank background replay/outcome traffic.
+                if await active_shadow_targets():
                     await asyncio.sleep(5);continue
                 groups=await due_outcome_group(limit=120)
                 by_chain={}

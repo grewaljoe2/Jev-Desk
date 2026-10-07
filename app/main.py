@@ -5,6 +5,7 @@ from app.providers.geckoterminal import GeckoTerminalDiscovery
 from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler,ingest_discovery
 from app.research.outcomes import OutcomeWorker
+from app.research.active_trades import ActiveTradeWorker
 from app.research.qualification_worker import QualificationWorker
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
@@ -17,12 +18,14 @@ provider=GeckoTerminalDiscovery()
 scheduler=ShadowScheduler(provider,settings.cycle_seconds)
 outcome_worker=OutcomeWorker(provider)
 qualification_worker=QualificationWorker(provider)
+active_trade_worker=ActiveTradeWorker(provider,seconds=15)
 
 @app.on_event("startup")
 async def startup():
     await init_db()
     scheduler.start()
     qualification_worker.start()
+    active_trade_worker.start()
     outcome_worker.start()
 
 @app.get("/health")
@@ -47,7 +50,7 @@ async def events(limit:int=50):return await recent_events(min(max(limit,1),500))
 @app.get("/research-health")
 async def research_health():
     r=await research_counts();q=await outcome_quality();sq=await scoreable_snapshot_quality();qh=await qualification_health();sp=await shadow_position_summary();se=await shadow_exit_summary()
-    return {"ok":True,"storage":r["storage"],"snapshots":r["snapshots"],"decisions":r["decisions"],"outcomes":r["outcomes"],"pending":r["pending"],"due_now":r.get("due_now",0),"outcome_quality":q,"scoreable_snapshots":sq,"qualification_queue":qh,"shadow_positions":sp,"shadow_exit_arms":se,"live_execution_enabled":False}
+    return {"ok":True,"storage":r["storage"],"snapshots":r["snapshots"],"decisions":r["decisions"],"outcomes":r["outcomes"],"pending":r["pending"],"due_now":r.get("due_now",0),"outcome_quality":q,"scoreable_snapshots":sq,"qualification_queue":qh,"shadow_positions":sp,"shadow_exit_arms":se,"active_trade_monitor":{"targets":active_trade_worker.last_targets,"marked_last_cycle":active_trade_worker.last_marked,"last_cycle_at":active_trade_worker.last_cycle_at,"last_error":active_trade_worker.last_error,"target_interval_seconds":active_trade_worker.seconds},"live_execution_enabled":False}
 
 @app.get("/replay-report")
 async def replay_report():

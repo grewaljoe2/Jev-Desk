@@ -85,6 +85,19 @@ async def mark_shadow_positions(token_id,price,observed_at,baseline_event_id=Non
             else:
                 await db.execute("UPDATE shadow_exit_arms SET peak_price=%s,last_price=%s,last_marked_at=%s WHERE id=%s",(peak,price,observed_at,arm_id))
 
+async def active_shadow_targets():
+    """Open forward positions that need high-priority marks. Pool identity comes from the immutable entry snapshot."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT p.id,p.token_id,p.baseline_event_id,p.last_marked_at,
+          e.payload_json->>'chain' AS chain,e.payload_json->'raw'->>'pool_id' AS pool_id
+          FROM virtual_positions p JOIN events e ON e.id=p.baseline_event_id
+          WHERE p.arm='reference' AND p.status='open' AND p.provenance='forward_qualification_v1'
+          ORDER BY p.last_marked_at ASC NULLS FIRST""")
+        return await cur.fetchall()
+
 async def shadow_exit_summary():
     """Per-policy forward evidence using actual observed exit prices; open P&L stays separate."""
     if not settings.database_url:return []
