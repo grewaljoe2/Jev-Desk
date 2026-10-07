@@ -11,8 +11,8 @@ class DexScreenerProvider:
         if not rows:return {"pair_found":False,"requested_pair":pair,"source":"dexscreener"}
         x=next((p for p in rows if str(p.get("pairAddress","")).lower()==pair.lower()),None)
         if x is None:return {"pair_found":False,"requested_pair":pair,"source":"dexscreener"}
-        tx=x.get("txns") or {};h1=tx.get("h1") or {};h24=tx.get("h24") or {};liq=x.get("liquidity") or {}
-        return {"pair_found":True,"liquidity_usd":_f(liq.get("usd")),"buys_h1":_i(h1.get("buys")),"sells_h1":_i(h1.get("sells")),"trades_h24":_tx_total(h24),"pair_address":x.get("pairAddress"),"source":"dexscreener"}
+        tx=x.get("txns") or {};h1=tx.get("h1") or {};h24=tx.get("h24") or {};liq=x.get("liquidity") or {};vol=x.get("volume") or {}
+        return {"pair_found":True,"liquidity_usd":_f(liq.get("usd")),"buys_h1":_i(h1.get("buys")),"sells_h1":_i(h1.get("sells")),"trades_h24":_tx_total(h24),"pair_address":x.get("pairAddress"),"price_usd":_f(x.get("priceUsd")),"volume_h6_usd":_f(vol.get("h6")),"volume_h24_usd":_f(vol.get("h24")),"source":"dexscreener"}
 def _f(v):
     try:return float(v) if v is not None else None
     except:return None
