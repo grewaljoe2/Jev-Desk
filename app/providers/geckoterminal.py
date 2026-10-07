@@ -1,4 +1,4 @@
-import asyncio,time,httpx
+import asyncio,time,httpx\nfrom email.utils import parsedate_to_datetime
 from datetime import datetime,timezone
 from app.providers.base import DiscoveryProvider
 from app.core.models import TokenSnapshot
@@ -11,7 +11,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             wait=self._next_call_at-time.monotonic()
             if wait>0:await asyncio.sleep(wait)
             r=await self._client.get(url,params=params)
-            self._next_call_at=time.monotonic()+3.0
+            self._next_call_at=time.monotonic()+4.0
             if r.status_code==429:
                 self._next_call_at=max(self._next_call_at,time.monotonic()+60.0)
                 raise RuntimeError("provider_rate_limited_429")
