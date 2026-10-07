@@ -18,6 +18,7 @@ ALTER TABLE outcome_jobs DROP CONSTRAINT IF EXISTS outcome_jobs_token_id_horizon
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_baseline_horizon ON outcome_jobs(baseline_event_id,horizon_minutes) WHERE baseline_event_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_legacy_token_horizon ON outcome_jobs(token_id,horizon_minutes) WHERE baseline_event_id IS NULL;
 CREATE TABLE IF NOT EXISTS qualification_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,chain TEXT NOT NULL,pool_id TEXT NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT,completed_at TIMESTAMPTZ,UNIQUE(chain,pool_id));
+ALTER TABLE qualification_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_qualification_jobs_due ON qualification_jobs(status,due_at);
 """
 SQLITE_SCHEMA="""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at TEXT NOT NULL,event_type TEXT NOT NULL,token_id TEXT,arm TEXT,payload_json TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_events_token ON events(token_id);CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type,created_at);CREATE TABLE IF NOT EXISTS virtual_positions(id INTEGER PRIMARY KEY AUTOINCREMENT,token_id TEXT NOT NULL,arm TEXT NOT NULL,status TEXT NOT NULL,requested_size_usd REAL NOT NULL,filled_size_usd REAL NOT NULL DEFAULT 0,entry_price REAL,opened_at TEXT,closed_at TEXT,exit_price REAL,UNIQUE(token_id,arm,status));"""
@@ -125,7 +126,7 @@ async def due_qualification_jobs(limit=12):
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT * FROM qualification_jobs WHERE status='pending' AND due_at<=NOW() ORDER BY due_at LIMIT %s",(limit,))
+        cur=await db.execute("SELECT * FROM qualification_jobs WHERE status='pending' AND due_at<=NOW() AND COALESCE(next_attempt_at,due_at)<=NOW() ORDER BY due_at LIMIT %s",(limit,))
         return await cur.fetchall()
 
 async def qualification_pressure():
@@ -133,7 +134,7 @@ async def qualification_pressure():
     if not settings.database_url:return {"due":0,"due_soon":0,"oldest_late_seconds":0.0}
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        cur=await db.execute("SELECT count(*) FILTER(WHERE status='pending' AND due_at<=NOW()),count(*) FILTER(WHERE status='pending' AND due_at<=NOW()+interval '90 seconds'),COALESCE(EXTRACT(EPOCH FROM (NOW()-min(due_at) FILTER(WHERE status='pending' AND due_at<=NOW()))),0) FROM qualification_jobs")
+        cur=await db.execute("SELECT count(*) FILTER(WHERE status='pending' AND due_at<=NOW() AND COALESCE(next_attempt_at,due_at)<=NOW()),count(*) FILTER(WHERE status='pending' AND due_at<=NOW()+interval '90 seconds' AND COALESCE(next_attempt_at,due_at)<=NOW()+interval '90 seconds'),COALESCE(EXTRACT(EPOCH FROM (NOW()-min(due_at) FILTER(WHERE status='pending' AND due_at<=NOW()))),0) FROM qualification_jobs")
         r=await cur.fetchone();return {"due":r[0],"due_soon":r[1],"oldest_late_seconds":float(r[2] or 0)}
 
 async def qualification_health():
@@ -148,10 +149,10 @@ async def complete_qualification_job(job_id):
     if not settings.database_url:return
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        await db.execute("UPDATE qualification_jobs SET status='done',completed_at=NOW(),last_error=NULL WHERE id=%s AND status='pending'",(job_id,))
+        await db.execute("UPDATE qualification_jobs SET status='done',completed_at=NOW(),last_error=NULL,next_attempt_at=NULL WHERE id=%s AND status='pending'",(job_id,))
 
 async def defer_qualification_job(job_id,minutes=2,error=None):
     if not settings.database_url:return
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        await db.execute("UPDATE qualification_jobs SET due_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s AND status='pending'",(minutes,error,job_id))
+        await db.execute("UPDATE qualification_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s AND status='pending'",(minutes,error,job_id))
