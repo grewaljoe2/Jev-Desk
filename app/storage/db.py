@@ -185,36 +185,36 @@ async def qualification_decision_totals():
             AND b.payload_json->'raw'->>'qualification_job_id' IS NOT NULL
             AND (b.payload_json->>'age_minutes')::double precision >= 15
         ), decisions AS (
-          SELECT bl.baseline_event_id,e.arm,e.payload_json
-          FROM baselines bl JOIN LATERAL (
-            SELECT d.arm,d.payload_json
-            FROM events d
-            WHERE d.event_type='DECISION' AND d.token_id=bl.token_id
-              AND d.created_at>=bl.created_at
-              AND d.created_at<bl.created_at+interval '2 minutes'
-            ORDER BY d.created_at
+          SELECT bl.baseline_event_id,d.arm,d.payload_json
+          FROM baselines bl
+          CROSS JOIN LATERAL (
+            SELECT e.arm,e.payload_json
+            FROM events e
+            WHERE e.event_type='DECISION' AND e.token_id=bl.token_id
+              AND e.created_at>=bl.created_at
+              AND e.created_at<bl.created_at+interval '2 minutes'
+            ORDER BY e.created_at
             LIMIT 3
-          ) e ON TRUE
-        )
-        SELECT (SELECT count(*) FROM baselines) AS sample_count,arm,
-          count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS TRUE) AS eligible,
-          count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS NOT TRUE AND ((payload_json->>'reason') LIKE 'missing:%%' OR payload_json->>'reason'='jev_not_configured_fail_closed')) AS unscorable,
-          count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS NOT TRUE AND NOT ((payload_json->>'reason') LIKE 'missing:%%' OR payload_json->>'reason'='jev_not_configured_fail_closed')) AS rejected,
-          jsonb_object_agg(reason,cnt) FILTER(WHERE reason IS NOT NULL) AS reasons
-        FROM (
-          SELECT d.*,r.reason,r.cnt FROM decisions d
-          LEFT JOIN (
+          ) d
+        ), counts AS (
+          SELECT arm,
+            count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS TRUE) eligible,
+            count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS NOT TRUE AND ((payload_json->>'reason') LIKE 'missing:%%' OR payload_json->>'reason'='jev_not_configured_fail_closed')) unscorable,
+            count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS NOT TRUE AND NOT ((payload_json->>'reason') LIKE 'missing:%%' OR payload_json->>'reason'='jev_not_configured_fail_closed')) rejected
+          FROM decisions GROUP BY arm
+        ), reasons AS (
+          SELECT arm,jsonb_object_agg(reason,cnt) reasons FROM (
             SELECT arm,payload_json->>'reason' reason,count(*) cnt
-            FROM decisions WHERE (payload_json->>'eligible')::boolean IS NOT TRUE
+            FROM decisions
+            WHERE (payload_json->>'eligible')::boolean IS NOT TRUE
             GROUP BY arm,payload_json->>'reason'
-          ) r ON r.arm=d.arm AND r.reason=d.payload_json->>'reason'
-        ) x
-        GROUP BY arm
+          ) r GROUP BY arm
+        )
+        SELECT (SELECT count(*) FROM baselines) sample_count,c.arm,c.eligible,c.unscorable,c.rejected,COALESCE(r.reasons,'{}'::jsonb) reasons
+        FROM counts c LEFT JOIN reasons r USING(arm)
         """)
-        rows=await cur.fetchall()
-        sample_count=max([r["sample_count"] for r in rows],default=0)
-        q={}
-        for r in rows:q[r["arm"]]={"eligible":r["eligible"],"unscorable":r["unscorable"],"rejected":r["rejected"],"reasons":r["reasons"] or {}}
+        rows=await cur.fetchall();sample_count=max([r["sample_count"] for r in rows],default=0)
+        q={r["arm"]:{"eligible":r["eligible"],"unscorable":r["unscorable"],"rejected":r["rejected"],"reasons":r["reasons"] or {}} for r in rows}
         return {"sample_count":sample_count,"qualification":q}
 
 async def scoreable_snapshot_quality():
