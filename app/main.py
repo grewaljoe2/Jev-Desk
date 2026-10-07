@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from app.core.config import settings
 from app.providers.geckoterminal import GeckoTerminalDiscovery
 from app.research.engine import process_snapshot
-from app.research.scheduler import ShadowScheduler
+from app.research.scheduler import ShadowScheduler,ingest_discovery
 from app.research.outcomes import OutcomeWorker
 from app.research.qualification_worker import QualificationWorker
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health
@@ -38,8 +38,8 @@ async def status():
 async def run_once():
     out=[]
     for s in await provider.discover():
-        d=await process_snapshot(s);out.append({"token":s.model_dump(mode="json"),"decisions":[x.model_dump(mode="json") for x in d]})
-    return {"count":len(out),"provider_diagnostics":provider.last_diagnostics,"results":out}
+        out.append(await ingest_discovery(s))
+    return {"count":len(out),"provider_diagnostics":provider.last_diagnostics,"results":out,"message":"Candidates observed; qualification scheduled where age is available. No early strategy evaluation and no real order sent."}
 
 @app.get("/events")
 async def events(limit:int=50):return await recent_events(min(max(limit,1),500))
