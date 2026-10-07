@@ -153,8 +153,8 @@ async def fast_shadow_positions_detail(limit=200):
           CASE WHEN p.entry_price>0 AND p.last_price IS NOT NULL THEN p.filled_size_usd*(p.last_price/p.entry_price-1) ELSE 0 END AS hold_pnl_usd,
           COALESCE(jsonb_agg(jsonb_build_object('policy',a.policy,'status',a.status,'entry_price',a.entry_price,'peak_price',a.peak_price,'last_price',a.last_price,'exit_price',a.exit_price,'opened_at',a.opened_at,'closed_at',a.closed_at,'exit_reason',a.exit_reason)) FILTER(WHERE a.id IS NOT NULL),'[]'::jsonb) AS exit_arms
           FROM virtual_positions p LEFT JOIN shadow_exit_arms a ON a.position_id=p.id
-          WHERE p.provenance LIKE 'forward_fast_%'
-          GROUP BY p.id ORDER BY p.opened_at DESC,p.id DESC LIMIT %s""",(limit,))
+          WHERE p.arm = ANY(%s)
+          GROUP BY p.id ORDER BY p.opened_at DESC,p.id DESC LIMIT %s""",(["fast_1m","fast_3m","fast_5m","fast_10m"],limit))
         return await cur.fetchall()
 
 async def shadow_positions_detail(limit=100):
