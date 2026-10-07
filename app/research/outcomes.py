@@ -17,7 +17,8 @@ class OutcomeWorker:
                         if baseline:
                             actual=(now-datetime.fromisoformat(str(baseline).replace("Z","+00:00"))).total_seconds()/60
                         payload={"requested_horizon_minutes":job["horizon_minutes"],"actual_elapsed_minutes":actual,"scheduled_due_at":job["due_at"],"observed_at":now,"observation":snap.model_dump(mode="json")}
-                        await complete_outcome_job(job["id"],Event(event_type="OUTCOME",token_id=job["token_id"],payload=payload))\n                        await asyncio.sleep(self.request_delay)
+                        await complete_outcome_job(job["id"],Event(event_type="OUTCOME",token_id=job["token_id"],payload=payload))
+                        await asyncio.sleep(3)
                     except Exception as e:
                         print("OUTCOME_RETRY",job["id"],job["token_id"],type(e).__name__,str(e)[:300],flush=True)
                         await defer_outcome_job(job["id"])
