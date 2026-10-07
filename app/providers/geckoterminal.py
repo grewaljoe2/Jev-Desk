@@ -1,4 +1,5 @@
 import asyncio,time,httpx
+from datetime import datetime,timezone
 from app.providers.base import DiscoveryProvider
 from app.core.models import TokenSnapshot
 
@@ -36,7 +37,11 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         a=row.get("attributes",{});rel=row.get("relationships",{});token=(rel.get("base_token") or {}).get("data") or {};addr=(token.get("id") or "").split("_",1)[-1]
         if not addr:return None
         vol=a.get("volume_usd") or {};tx=(a.get("transactions") or {}).get("h24") or {}
-        return TokenSnapshot(token_id=f"{network}:{addr}",address=addr,chain=network,ticker=a.get("name") or addr[:8],price_usd=_f(a.get("base_token_price_usd")),liquidity_usd=_f(a.get("reserve_in_usd")),volume_h24_usd=_f(vol.get("h24")),mcap_usd=_f(a.get("market_cap_usd") or a.get("fdv_usd")),trades_h24=_i(tx.get("buys"))+_i(tx.get("sells")),raw={"source":"geckoterminal","pool_id":row.get("id"),"pool_created_at":a.get("pool_created_at")})
+        created=a.get("pool_created_at");age=None
+        if created:
+            try:age=max(0.0,(datetime.now(timezone.utc)-datetime.fromisoformat(str(created).replace("Z","+00:00"))).total_seconds()/60.0)
+            except:pass
+        return TokenSnapshot(token_id=f"{network}:{addr}",address=addr,chain=network,ticker=a.get("name") or addr[:8],price_usd=_f(a.get("base_token_price_usd")),age_minutes=age,liquidity_usd=_f(a.get("reserve_in_usd")),volume_h24_usd=_f(vol.get("h24")),mcap_usd=_f(a.get("market_cap_usd") or a.get("fdv_usd")),trades_h24=_i(tx.get("buys"))+_i(tx.get("sells")),raw={"source":"geckoterminal","pool_id":row.get("id"),"pool_created_at":a.get("pool_created_at")})
 def _f(v):
     try:return float(v) if v is not None else None
     except:return None
