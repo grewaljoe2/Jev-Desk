@@ -25,9 +25,11 @@ class SavipJevWorker:
                     await complete_savip_jev_claim(row["chain_event_id"],"failed")
                     self.last_error="exact_x_reader_not_configured";continue
                 x_observation=await self.x_provider.observe_exact(x_handle)
+                # A public-reader outage/unavailable account is missing SOCIAL evidence,
+                # not a fabricated pass or hard reject. The entry stage applies Savip's
+                # published 0.60 missing-X size factor when x_observation remains absent.
                 if x_observation is None:
-                    await complete_savip_jev_claim(row["chain_event_id"],"failed")
-                    self.last_error="exact_x_observation_unavailable";continue
+                    self.last_error="exact_x_observation_unavailable_reduced_size"
             evidence=build_evidence(payload,x_observation=x_observation)
             result=await run_typed_jev(self.provider,evidence,QUESTION_SETS,RULES)
             await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
