@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS virtual_positions(id BIGSERIAL PRIMARY KEY,token_id T
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS baseline_event_id BIGINT;
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_price DOUBLE PRECISION;
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_marked_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS shadow_exit_arms(id BIGSERIAL PRIMARY KEY,position_id BIGINT NOT NULL,policy TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',entry_price DOUBLE PRECISION NOT NULL,opened_at TIMESTAMPTZ NOT NULL,peak_price DOUBLE PRECISION NOT NULL,exit_price DOUBLE PRECISION,closed_at TIMESTAMPTZ,exit_reason TEXT,last_price DOUBLE PRECISION,last_marked_at TIMESTAMPTZ,UNIQUE(position_id,policy));
 CREATE TABLE IF NOT EXISTS outcome_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,horizon_minutes INTEGER NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',UNIQUE(token_id,horizon_minutes));
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
@@ -58,6 +59,8 @@ async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
             if await cur.fetchone():return None
             cur=await db.execute("INSERT INTO virtual_positions(token_id,arm,status,requested_size_usd,filled_size_usd,entry_price,opened_at) VALUES(%s,'reference','open',%s,%s,%s,%s) RETURNING id",(snapshot.token_id,notional_usd,notional_usd,snapshot.price_usd,snapshot.observed_at))
             position_id=(await cur.fetchone())[0]
+            for policy in ('tp20_sl10_v1','trail15_after10_v1','time24h_v1'):
+                await db.execute("INSERT INTO shadow_exit_arms(position_id,policy,status,entry_price,opened_at,peak_price,last_price,last_marked_at) VALUES(%s,%s,'open',%s,%s,%s,%s,%s) ON CONFLICT(position_id,policy) DO NOTHING",(position_id,policy,snapshot.price_usd,snapshot.observed_at,snapshot.price_usd,snapshot.price_usd,snapshot.observed_at))
             payload=json.dumps({"position_id":position_id,"baseline_event_id":baseline_event_id,"notional_usd":notional_usd,"entry_price":snapshot.price_usd,"price_basis":"provider_observed_price_proxy","research_only":True,"real_execution":False},default=str)
             await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(%s,'SHADOW_ENTRY',%s,'reference',%s::jsonb)",(snapshot.observed_at,snapshot.token_id,payload))
             return position_id
@@ -68,6 +71,26 @@ async def mark_shadow_positions(token_id,price,observed_at,baseline_event_id=Non
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("UPDATE virtual_positions SET last_price=%s,last_marked_at=%s WHERE token_id=%s AND arm='reference' AND status='open'",(price,observed_at,token_id))
+        cur=await db.execute("SELECT a.id,a.policy,a.entry_price,a.opened_at,a.peak_price,p.filled_size_usd FROM shadow_exit_arms a JOIN virtual_positions p ON p.id=a.position_id WHERE p.token_id=%s AND p.status='open' AND a.status='open'",(token_id,))
+        for arm_id,policy,entry,opened,peak,size in await cur.fetchall():
+            peak=max(float(peak or entry),float(price));ret=float(price)/float(entry)-1;reason=None
+            if policy=='tp20_sl10_v1':
+                if ret>=0.20:reason='take_profit_20'
+                elif ret<=-0.10:reason='stop_loss_10'
+            elif policy=='trail15_after10_v1' and peak>=float(entry)*1.10 and float(price)<=peak*0.85:reason='trailing_15_after_10'
+            elif policy=='time24h_v1' and (observed_at-opened).total_seconds()>=86400:reason='time_24h'
+            if reason:
+                await db.execute("UPDATE shadow_exit_arms SET status='closed',peak_price=%s,last_price=%s,last_marked_at=%s,exit_price=%s,closed_at=%s,exit_reason=%s WHERE id=%s",(peak,price,observed_at,price,observed_at,reason,arm_id))
+            else:
+                await db.execute("UPDATE shadow_exit_arms SET peak_price=%s,last_price=%s,last_marked_at=%s WHERE id=%s",(peak,price,observed_at,arm_id))
+
+async def shadow_exit_summary():
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("SELECT policy,count(*) FILTER(WHERE status='open') AS open,count(*) FILTER(WHERE status='closed') AS closed,COALESCE(sum(CASE WHEN status='closed' THEN 100.0*(exit_price/entry_price-1) ELSE 0 END),0) AS realized_pnl_usd FROM shadow_exit_arms GROUP BY policy ORDER BY policy")
+        return await cur.fetchall()
 
 async def shadow_position_summary():
     if not settings.database_url:return {"open":0,"closed":0,"realized_pnl_usd":0.0}
