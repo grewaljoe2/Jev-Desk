@@ -16,7 +16,7 @@ from app.research.qualification import qualification_diagnostics
 
 app=FastAPI(title=settings.app_name,version=settings.version)
 provider=GeckoTerminalDiscovery()
-scheduler=ShadowScheduler(provider,120)
+scheduler=ShadowScheduler(provider,30)
 outcome_worker=OutcomeWorker(provider)
 qualification_worker=QualificationWorker(provider)
 active_trade_worker=ActiveTradeWorker(provider,seconds=15)
