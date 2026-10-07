@@ -37,6 +37,8 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None):
     if not settings.database_url:return
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT 1 FROM outcome_jobs WHERE token_id=%s AND baseline_event_id IS NOT NULL AND due_at >= %s - interval '5 minutes' LIMIT 1",(token_id,observed_at))
+        if await cur.fetchone():return
         for h in HORIZONS:
             await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
 async def research_counts():
