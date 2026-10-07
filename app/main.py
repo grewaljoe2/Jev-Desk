@@ -5,6 +5,7 @@ from app.providers.geckoterminal import GeckoTerminalDiscovery
 from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler
 from app.research.outcomes import OutcomeWorker
+from app.research.qualification_worker import QualificationWorker
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality
 from app.research.replay_dataset import load_clean_replay_samples
 from app.research.replay_pipeline import run_replay_research
@@ -15,11 +16,13 @@ app=FastAPI(title=settings.app_name,version=settings.version)
 provider=GeckoTerminalDiscovery()
 scheduler=ShadowScheduler(provider,settings.cycle_seconds)
 outcome_worker=OutcomeWorker(provider)
+qualification_worker=QualificationWorker(provider)
 
 @app.on_event("startup")
 async def startup():
     await init_db()
     scheduler.start()
+    qualification_worker.start()
     outcome_worker.start()
 
 @app.get("/health")
