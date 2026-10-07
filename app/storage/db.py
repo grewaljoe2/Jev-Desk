@@ -170,6 +170,53 @@ async def qualification_replay_rows(limit=500):
         cur=await db.execute("SELECT j.baseline_event_id,b.payload_json AS snapshot_payload,jsonb_agg(o.payload_json ORDER BY o.created_at) FILTER(WHERE o.id IS NOT NULL) AS outcomes FROM outcome_jobs j JOIN events b ON b.id=j.baseline_event_id LEFT JOIN events o ON o.event_type='OUTCOME' AND (o.payload_json->>'baseline_event_id')::bigint=j.baseline_event_id WHERE j.timing_provenance='clean_v061' AND j.baseline_event_id IS NOT NULL AND b.payload_json->'raw'->>'qualification_job_id' IS NOT NULL AND (b.payload_json->>'age_minutes')::double precision >= 15 GROUP BY j.baseline_event_id,b.payload_json ORDER BY j.baseline_event_id DESC LIMIT %s",(limit,))
         return await cur.fetchall()
 
+async def qualification_decision_totals():
+    """Aggregate ALL corrected >=15m qualification decisions without a replay-row cap."""
+    if not settings.database_url:return {"sample_count":0,"qualification":{}}
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""
+        WITH baselines AS (
+          SELECT DISTINCT j.baseline_event_id,b.token_id,b.created_at
+          FROM outcome_jobs j JOIN events b ON b.id=j.baseline_event_id
+          WHERE j.timing_provenance='clean_v061' AND j.baseline_event_id IS NOT NULL
+            AND b.event_type='SNAPSHOT'
+            AND b.payload_json->'raw'->>'qualification_job_id' IS NOT NULL
+            AND (b.payload_json->>'age_minutes')::double precision >= 15
+        ), decisions AS (
+          SELECT bl.baseline_event_id,e.arm,e.payload_json
+          FROM baselines bl JOIN LATERAL (
+            SELECT d.arm,d.payload_json
+            FROM events d
+            WHERE d.event_type='DECISION' AND d.token_id=bl.token_id
+              AND d.created_at>=bl.created_at
+              AND d.created_at<bl.created_at+interval '2 minutes'
+            ORDER BY d.created_at
+            LIMIT 3
+          ) e ON TRUE
+        )
+        SELECT (SELECT count(*) FROM baselines) AS sample_count,arm,
+          count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS TRUE) AS eligible,
+          count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS NOT TRUE AND ((payload_json->>'reason') LIKE 'missing:%%' OR payload_json->>'reason'='jev_not_configured_fail_closed')) AS unscorable,
+          count(*) FILTER(WHERE (payload_json->>'eligible')::boolean IS NOT TRUE AND NOT ((payload_json->>'reason') LIKE 'missing:%%' OR payload_json->>'reason'='jev_not_configured_fail_closed')) AS rejected,
+          jsonb_object_agg(reason,cnt) FILTER(WHERE reason IS NOT NULL) AS reasons
+        FROM (
+          SELECT d.*,r.reason,r.cnt FROM decisions d
+          LEFT JOIN (
+            SELECT arm,payload_json->>'reason' reason,count(*) cnt
+            FROM decisions WHERE (payload_json->>'eligible')::boolean IS NOT TRUE
+            GROUP BY arm,payload_json->>'reason'
+          ) r ON r.arm=d.arm AND r.reason=d.payload_json->>'reason'
+        ) x
+        GROUP BY arm
+        """)
+        rows=await cur.fetchall()
+        sample_count=max([r["sample_count"] for r in rows],default=0)
+        q={}
+        for r in rows:q[r["arm"]]={"eligible":r["eligible"],"unscorable":r["unscorable"],"rejected":r["rejected"],"reasons":r["reasons"] or {}}
+        return {"sample_count":sample_count,"qualification":q}
+
 async def scoreable_snapshot_quality():
     """Count immutable snapshots by whether deterministic age is present."""
     if not settings.database_url:return {"with_age":0,"missing_age":0,"latest_with_age":None}
