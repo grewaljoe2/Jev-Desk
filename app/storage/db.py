@@ -65,7 +65,7 @@ async def complete_outcome_job(job_id,event):
             cur=await db.execute("UPDATE outcome_jobs SET status='done',last_error=NULL WHERE id=%s AND status='pending' RETURNING id",(job_id,))
             if not await cur.fetchone():return
             await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(%s,%s,%s,%s,%s::jsonb)",(event.created_at,event.event_type,event.token_id,event.arm,payload))
-async def defer_outcome_job(job_id,minutes=5):
+async def defer_outcome_job(job_id,minutes=5,error=None):
     if not settings.database_url:return
     import psycopg
-    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1 WHERE id=%s",(minutes,job_id))
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s",(minutes,error,job_id))
