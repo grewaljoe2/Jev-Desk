@@ -22,7 +22,7 @@ class OutcomeWorker:
                         for due_job in group:
                             due_base=due_job["payload_json"];due_baseline=due_base.get("observed_at");due_actual=None
                             if due_baseline:due_actual=(now-datetime.fromisoformat(str(due_baseline).replace("Z","+00:00"))).total_seconds()/60
-                            payload={"requested_horizon_minutes":due_job["horizon_minutes"],"actual_elapsed_minutes":due_actual,"scheduled_due_at":due_job["due_at"],"observed_at":now,"observation":snap.model_dump(mode="json")}
+                            payload={"requested_horizon_minutes":due_job["horizon_minutes"],"actual_elapsed_minutes":due_actual,"scheduled_due_at":due_job["due_at"],"baseline_event_id":due_job["baseline_event_id"],"observed_at":now,"observation":snap.model_dump(mode="json")}
                             await complete_outcome_job(due_job["id"],Event(event_type="OUTCOME",token_id=due_job["token_id"],payload=payload))
                         await asyncio.sleep(3)
                     except Exception as e:
