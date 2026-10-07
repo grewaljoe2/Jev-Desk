@@ -33,7 +33,7 @@ class QualificationWorker:
     async def loop(self):
         while True:
             try:
-                jobs=await due_qualification_jobs(limit=120)
+                jobs=await due_qualification_jobs(limit=30)
                 self.provider.set_entry_pressure(bool(jobs))
                 groups={}
                 for job in jobs:groups.setdefault(job["chain"],[]).append(job)
