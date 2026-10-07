@@ -3,37 +3,30 @@ from app.providers.base import DiscoveryProvider
 from app.core.models import TokenSnapshot
 
 class GeckoTerminalDiscovery(DiscoveryProvider):
-    """Public-data discovery adapter. No wallet/order capability."""
     BASE="https://api.geckoterminal.com/api/v2"
     NETWORKS=("solana","eth","base","bsc")
+    def __init__(self): self.last_diagnostics={}
 
-    async def discover(self)->list[TokenSnapshot]:
-        out=[]
-        async with httpx.AsyncClient(timeout=15,headers={"Accept":"application/json"}) as c:
+    async def discover(self):
+        out=[]; diag={}
+        async with httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.4.1"}) as c:
             for network in self.NETWORKS:
                 try:
                     r=await c.get(f"{self.BASE}/networks/{network}/new_pools",params={"page":1})
+                    diag[network]={"http":r.status_code,"bytes":len(r.content)}
                     r.raise_for_status()
-                    for row in r.json().get("data",[])[:20]:
-                        a=row.get("attributes",{})
-                        rel=row.get("relationships",{})
+                    rows=r.json().get("data",[])
+                    diag[network]["rows"]=len(rows)
+                    for row in rows[:20]:
+                        a=row.get("attributes",{}); rel=row.get("relationships",{})
                         token=(rel.get("base_token") or {}).get("data") or {}
                         addr=(token.get("id") or "").split("_",1)[-1]
                         if not addr: continue
-                        vol=(a.get("volume_usd") or {})
-                        tx=(a.get("transactions") or {}).get("h24") or {}
-                        out.append(TokenSnapshot(
-                            token_id=f"{network}:{addr}",address=addr,chain=network,
-                            ticker=a.get("name") or addr[:8],
-                            liquidity_usd=_f(a.get("reserve_in_usd")),
-                            volume_h24_usd=_f(vol.get("h24")),
-                            mcap_usd=_f(a.get("market_cap_usd") or a.get("fdv_usd")),
-                            trades_h24=_i(tx.get("buys"))+_i(tx.get("sells")),
-                            raw={"source":"geckoterminal","pool_id":row.get("id"),"pool_created_at":a.get("pool_created_at")}
-                        ))
+                        vol=a.get("volume_usd") or {}; tx=(a.get("transactions") or {}).get("h24") or {}
+                        out.append(TokenSnapshot(token_id=f"{network}:{addr}",address=addr,chain=network,ticker=a.get("name") or addr[:8],liquidity_usd=_f(a.get("reserve_in_usd")),volume_h24_usd=_f(vol.get("h24")),mcap_usd=_f(a.get("market_cap_usd") or a.get("fdv_usd")),trades_h24=_i(tx.get("buys"))+_i(tx.get("sells")),raw={"source":"geckoterminal","pool_id":row.get("id"),"pool_created_at":a.get("pool_created_at")}))
                 except Exception as e:
-                    # Provider errors are observable; never fabricate market facts.
-                    continue
+                    diag.setdefault(network,{})["error"]=f"{type(e).__name__}: {str(e)[:180]}"
+        self.last_diagnostics=diag
         return out
 
 def _f(v):
