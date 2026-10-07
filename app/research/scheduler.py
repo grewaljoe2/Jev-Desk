@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime,timezone,timedelta
 from app.core.models import Event
-from app.storage.db import log_event,schedule_qualification
+from app.storage.db import log_event,schedule_qualification,schedule_fast_entry
 
 async def ingest_discovery(snapshot):
     """Record discovery evidence and schedule, but never evaluate before >=15m."""
@@ -10,7 +10,13 @@ async def ingest_discovery(snapshot):
     scheduled=False
     if snapshot.age_minutes is not None and pool_id:
         remaining=max(0.0,15.0-snapshot.age_minutes)
-        await schedule_qualification(snapshot.token_id,snapshot.chain,pool_id,datetime.now(timezone.utc)+timedelta(minutes=remaining))
+        now=datetime.now(timezone.utc)
+        await schedule_qualification(snapshot.token_id,snapshot.chain,pool_id,now+timedelta(minutes=remaining))
+        # Separate forward experiment: only schedule a cohort if discovery occurred before its target age.
+        # This prevents a late discovery from masquerading as a 1m/3m/5m/10m entry.
+        for cohort in (1,3,5,10):
+            if snapshot.age_minutes <= cohort:
+                await schedule_fast_entry(snapshot.token_id,snapshot.chain,pool_id,cohort,now+timedelta(minutes=max(0.0,cohort-snapshot.age_minutes)))
         scheduled=True
     return {"token_id":snapshot.token_id,"age_minutes":snapshot.age_minutes,"scheduled":scheduled}
 
