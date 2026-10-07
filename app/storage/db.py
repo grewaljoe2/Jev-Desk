@@ -25,6 +25,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_legacy_token_horizon ON outco
 CREATE TABLE IF NOT EXISTS qualification_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,chain TEXT NOT NULL,pool_id TEXT NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT,completed_at TIMESTAMPTZ,UNIQUE(chain,pool_id));
 ALTER TABLE qualification_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_qualification_jobs_due ON qualification_jobs(status,due_at);
+CREATE TABLE IF NOT EXISTS fast_entry_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,chain TEXT NOT NULL,pool_id TEXT NOT NULL,cohort_minutes INTEGER NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT,completed_at TIMESTAMPTZ,next_attempt_at TIMESTAMPTZ,UNIQUE(chain,pool_id,cohort_minutes));
+CREATE INDEX IF NOT EXISTS idx_fast_entry_jobs_due ON fast_entry_jobs(status,due_at);
 """
 SQLITE_SCHEMA="""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,created_at TEXT NOT NULL,event_type TEXT NOT NULL,token_id TEXT,arm TEXT,payload_json TEXT NOT NULL);CREATE INDEX IF NOT EXISTS idx_events_token ON events(token_id);CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type,created_at);CREATE TABLE IF NOT EXISTS virtual_positions(id INTEGER PRIMARY KEY AUTOINCREMENT,token_id TEXT NOT NULL,arm TEXT NOT NULL,status TEXT NOT NULL,requested_size_usd REAL NOT NULL,filled_size_usd REAL NOT NULL DEFAULT 0,entry_price REAL,opened_at TEXT,closed_at TEXT,exit_price REAL,UNIQUE(token_id,arm,status));"""
 async def init_db():
@@ -71,7 +73,7 @@ async def mark_shadow_positions(token_id,price,observed_at,baseline_event_id=Non
     if not settings.database_url or price is None or price<=0:return
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        await db.execute("UPDATE virtual_positions SET last_price=%s,last_marked_at=%s WHERE token_id=%s AND arm='reference' AND status='open'",(price,observed_at,token_id))
+        await db.execute("UPDATE virtual_positions SET last_price=%s,last_marked_at=%s WHERE token_id=%s AND status='open'",(price,observed_at,token_id))
         cur=await db.execute("SELECT a.id,a.policy,a.entry_price,a.opened_at,a.peak_price,p.filled_size_usd FROM shadow_exit_arms a JOIN virtual_positions p ON p.id=a.position_id WHERE p.token_id=%s AND p.status='open' AND a.status='open'",(token_id,))
         for arm_id,policy,entry,opened,peak,size in await cur.fetchall():
             peak=max(float(peak or entry),float(price));ret=float(price)/float(entry)-1;reason=None
@@ -94,7 +96,7 @@ async def active_shadow_targets():
         cur=await db.execute("""SELECT p.id,p.token_id,p.baseline_event_id,p.last_marked_at,
           e.payload_json->>'chain' AS chain,e.payload_json->'raw'->>'pool_id' AS pool_id
           FROM virtual_positions p JOIN events e ON e.id=p.baseline_event_id
-          WHERE p.arm='reference' AND p.status='open' AND p.provenance='forward_qualification_v1'
+          WHERE p.status='open' AND (p.provenance='forward_qualification_v1' OR p.provenance LIKE 'forward_fast_%')
           ORDER BY p.last_marked_at ASC NULLS FIRST""")
         return await cur.fetchall()
 
@@ -278,6 +280,50 @@ async def schedule_qualification(token_id,chain,pool_id,due_at):
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("INSERT INTO qualification_jobs(token_id,chain,pool_id,due_at,status) VALUES(%s,%s,%s,%s,'pending') ON CONFLICT(chain,pool_id) DO NOTHING",(token_id,chain,pool_id,due_at))
+
+async def schedule_fast_entry(token_id,chain,pool_id,cohort_minutes,due_at):
+    if not settings.database_url or not pool_id:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("INSERT INTO fast_entry_jobs(token_id,chain,pool_id,cohort_minutes,due_at,status) VALUES(%s,%s,%s,%s,%s,'pending') ON CONFLICT(chain,pool_id,cohort_minutes) DO NOTHING",(token_id,chain,pool_id,cohort_minutes,due_at))
+
+async def due_fast_entry_jobs(limit=120):
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("SELECT * FROM fast_entry_jobs WHERE status='pending' AND due_at<=NOW() AND COALESCE(next_attempt_at,due_at)<=NOW() ORDER BY due_at LIMIT %s",(limit,))
+        return await cur.fetchall()
+
+async def complete_fast_entry_job(job_id):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("UPDATE fast_entry_jobs SET status='done',completed_at=NOW(),last_error=NULL,next_attempt_at=NULL WHERE id=%s AND status='pending'",(job_id,))
+
+async def defer_fast_entry_job(job_id,minutes=1,error=None):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("UPDATE fast_entry_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s AND status='pending'",(minutes,error,job_id))
+
+async def open_fast_shadow_position(snapshot,baseline_event_id,cohort_minutes,notional_usd=100.0):
+    """Separate forward experiment; never changes the 15m reference/control position."""
+    if not settings.database_url or snapshot.price_usd is None or snapshot.price_usd<=0:return None
+    import psycopg
+    arm=f"fast_{int(cohort_minutes)}m"
+    provenance=f"forward_fast_{int(cohort_minutes)}m_v1"
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        async with db.transaction():
+            cur=await db.execute("SELECT id FROM virtual_positions WHERE token_id=%s AND arm=%s AND status='open' LIMIT 1",(snapshot.token_id,arm))
+            if await cur.fetchone():return None
+            cur=await db.execute("INSERT INTO virtual_positions(token_id,arm,status,requested_size_usd,filled_size_usd,entry_price,opened_at,baseline_event_id,provenance) VALUES(%s,%s,'open',%s,%s,%s,%s,%s,%s) RETURNING id",(snapshot.token_id,arm,notional_usd,notional_usd,snapshot.price_usd,snapshot.observed_at,baseline_event_id,provenance))
+            position_id=(await cur.fetchone())[0]
+            for policy in ('tp20_sl10_v1','trail15_after10_v1','time24h_v1'):
+                await db.execute("INSERT INTO shadow_exit_arms(position_id,policy,status,entry_price,opened_at,peak_price,last_price,last_marked_at) VALUES(%s,%s,'open',%s,%s,%s,%s,%s) ON CONFLICT(position_id,policy) DO NOTHING",(position_id,policy,snapshot.price_usd,snapshot.observed_at,snapshot.price_usd,snapshot.price_usd,snapshot.observed_at))
+            payload=json.dumps({"position_id":position_id,"baseline_event_id":baseline_event_id,"cohort_minutes":cohort_minutes,"notional_usd":notional_usd,"entry_price":snapshot.price_usd,"experiment":"fast_entry_v1","research_only":True,"real_execution":False},default=str)
+            await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(%s,'FAST_SHADOW_ENTRY',%s,%s,%s::jsonb)",(snapshot.observed_at,snapshot.token_id,arm,payload))
+            return position_id
 
 async def due_qualification_jobs(limit=12):
     if not settings.database_url:return []
