@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime,timezone,timedelta
-from app.research.engine import process_snapshot
+from app.core.models import Event
+from app.storage.db import log_event
 from app.storage.db import due_qualification_jobs,complete_qualification_job,defer_qualification_job
 
 class QualificationWorker:
@@ -29,7 +30,10 @@ class QualificationWorker:
         snap.raw["qualification_due_at"]=job["due_at"].isoformat() if hasattr(job["due_at"],"isoformat") else str(job["due_at"])
         snap.raw["qualification_actual_at"]=now.isoformat()
         snap.raw["qualification_lateness_seconds"]=max(0.0,(now-job["due_at"]).total_seconds())
-        await process_snapshot(snap);await complete_qualification_job(job["id"])
+        # Savip-exclusive mode: retain 15m SNAPSHOT evidence, but do not
+        # generate legacy decisions, shadow entries, or outcome schedules.
+        await log_event(Event(event_type="SNAPSHOT",token_id=snap.token_id,payload=snap.model_dump(mode="json")))
+        await complete_qualification_job(job["id"])
     async def loop(self):
         while True:
             try:
