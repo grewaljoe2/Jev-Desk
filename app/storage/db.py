@@ -149,10 +149,10 @@ async def fast_entry_diagnostics():
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("""SELECT arm,payload->>'reason' AS reason,count(*) AS n,
-          avg(NULLIF(payload->>'observed_age_minutes','')::double precision) AS avg_observed_age_minutes
+        cur=await db.execute("""SELECT arm,payload_json->>'reason' AS reason,count(*) AS n,
+          avg(NULLIF(payload_json->>'observed_age_minutes','')::double precision) AS avg_observed_age_minutes
           FROM events WHERE event_type='FAST_ENTRY_DECISION'
-          GROUP BY arm,payload->>'reason' ORDER BY arm,n DESC""")
+          GROUP BY arm,payload_json->>'reason' ORDER BY arm,n DESC""")
         decisions=await cur.fetchall()
         cur=await db.execute("""SELECT cohort_minutes,status,count(*) AS n,
           min(due_at) FILTER(WHERE status='pending') AS oldest_pending_due_at,
