@@ -11,7 +11,6 @@ class SavipShadowEntryWorker:
         row=await latest_accepted_savip_pick()
         if not row or await savip_pick_already_opened(row["id"]):self.state="waiting";return
         p=row["payload_json"];evidence=(p.get("evidence") or {})
-        # Multi-candidate PICK does not carry a winner evidence packet; recover only from persisted PICK payload.
         market=evidence.get("market") or {}
         price=market.get("price_usd");liq=market.get("liquidity_usd")
         if not price or not liq:
