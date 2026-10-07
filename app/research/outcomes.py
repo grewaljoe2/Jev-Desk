@@ -7,11 +7,12 @@ class OutcomeWorker:
     async def loop(self):
         while True:
             try:
-                # Historical research is spare-capacity work. Never let it outrank
+                # Expiring stale research is DB-only and frees backlog without a provider call.
+                await expire_stale_outcome_jobs()
+                # Historical provider traffic is spare-capacity work. Never let it outrank
                 # fresh 1/3/5/10m or 15m entry observations.
                 if (await qualification_pressure())["due_soon"] or (await fast_entry_pressure())["due_soon"]:
                     await asyncio.sleep(5);continue
-                await expire_stale_outcome_jobs()
                 # Open forward positions outrank background replay/outcome traffic.
                 if await active_shadow_targets():
                     await asyncio.sleep(5);continue
