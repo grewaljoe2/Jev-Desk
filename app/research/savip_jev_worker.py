@@ -12,7 +12,8 @@ class SavipJevWorker:
         self.last_checked=0;self.last_passed=0;self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_passed=0;self.last_error=None
-        if await open_savip_positions():return\n        if not self.provider.configured:return
+        if await open_savip_positions():return
+        if not self.provider.configured:return
         for row in await unjudged_chain_passes(self.cap):
             if not await claim_savip_jev(row["chain_event_id"],row["token_id"]):continue
             self.last_checked+=1
