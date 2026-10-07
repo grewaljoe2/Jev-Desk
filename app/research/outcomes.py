@@ -1,14 +1,17 @@
 import asyncio
 from datetime import datetime,timezone
 from app.core.models import Event
-from app.storage.db import due_outcome_group,complete_outcome_job,defer_outcome_job,qualification_pressure,mark_shadow_positions,active_shadow_targets
+from app.storage.db import due_outcome_group,complete_outcome_job,defer_outcome_job,qualification_pressure,fast_entry_pressure,expire_stale_outcome_jobs,mark_shadow_positions,active_shadow_targets
 class OutcomeWorker:
     def __init__(self,provider,seconds=15):self.provider=provider;self.seconds=seconds;self.task=None
     async def loop(self):
         while True:
             try:
-                if (await qualification_pressure())["due_soon"]:
+                # Historical research is spare-capacity work. Never let it outrank
+                # fresh 1/3/5/10m or 15m entry observations.
+                if (await qualification_pressure())["due_soon"] or (await fast_entry_pressure())["due_soon"]:
                     await asyncio.sleep(5);continue
+                await expire_stale_outcome_jobs()
                 # Open forward positions outrank background replay/outcome traffic.
                 if await active_shadow_targets():
                     await asyncio.sleep(5);continue
@@ -20,7 +23,7 @@ class OutcomeWorker:
                 stop=False
                 for chain,items in by_chain.items():
                     for offset in range(0,len(items),30):
-                        if (await qualification_pressure())["due_soon"]:stop=True;break
+                        if (await qualification_pressure())["due_soon"] or (await fast_entry_pressure())["due_soon"]:stop=True;break
                         batch=items[offset:offset+30]
                         try:
                             snaps=await self.provider.fetch_pools(chain,[p for p,_ in batch])
