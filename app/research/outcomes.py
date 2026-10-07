@@ -22,7 +22,7 @@ class OutcomeWorker:
                     except Exception as e:
                         msg=str(e)[:300]
                         print("OUTCOME_RETRY",job["id"],job["token_id"],type(e).__name__,msg,flush=True)
-                        await defer_outcome_job(job["id"],minutes=15 if "429" in msg else 5)
+                        await defer_outcome_job(job["id"],minutes=15 if "429" in msg else 5,error=msg)
                         if "429" in msg:
                             await asyncio.sleep(60)
                             break
