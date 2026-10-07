@@ -68,5 +68,20 @@ Real trades remain OFF.
 Free Render service may sleep; do not claim exact always-on 5-minute observations until hosting guarantees it.
 The current free Render PostgreSQL database is development infrastructure and was reported to expire 2026-11-06; upgrade/migrate before expiry if project continues. Never expose DATABASE_URL/password. Do not open external DB networking merely for inspection.
 
+
+## 2026-10-07 live research lifecycle update
+Authoritative current state after PRs #33-#36; this section supersedes older implementation-status bullets above where they conflict.
+- Production remains SHADOW ONLY; live execution is disabled.
+- PR #33 bound proper qualification snapshots to their own clean outcome cohorts and made discovery/manual scans schedule qualification without early strategy evaluation.
+- PR #34 made the original >=15m qualification target immutable across retries by separating retry time into next_attempt_at. Lateness is measured against the original target.
+- PR #35 fixed the qualification capacity bottleneck by batching same-network GeckoTerminal pool observations (up to 30 per request) and pacing the public API conservatively. Observed production recovery: due queue fell from 103 to 0 while checked rose from 102 to 238; later 13 due / 247 checked and reported on schedule.
+- PR #36 separated corrected qualification-entry evidence from old discovery-era replay evidence. Qualification diagnostics now select snapshots carrying raw.qualification_job_id; old cohorts remain stored and are not rewritten/deleted.
+- Latest observed mobile state after PR #36: Outcomes 299; Due Now outcome backlog 3884; snapshots with age 828; qualification queue 77 waiting / 13 due / 247 checked; Market Samples 61; scoreable strategy evidence 60; Q0/U1/R60 in all three arms. The one unscorable reason is missing:liquidity_usd. The 60 rejected samples still report age_too_young.
+- IMPORTANT: those 60 age_too_young corrected-entry samples are not trusted strategy evidence yet. QualificationWorker explicitly checks snap.age_minutes >=15 before process_snapshot, so this contradiction must be traced before allowing them into the evidence gate. Do not lower thresholds, relabel old data, or count these 60 toward validation until provenance is resolved.
+- Qualification throughput is currently healthy after batching; do not undo batching or add concurrent workers blindly. The separate outcome backlog remains large and lower priority than time-sensitive qualification.
+- Next task: trace one qualification_job_id end-to-end (job due_at -> provider pool_created_at/age_minutes -> SNAPSHOT raw qualification metadata -> evaluate_all/filter reason -> outcome cohort -> qualification dataset). Determine why qualification-tagged snapshots can diagnose age_too_young despite the >=15m worker guard. Add a fail-closed invariant so an entry cohort with age_minutes <15 cannot become strategy evidence. Then re-verify production Q/U/R and evidence counts.
+- After the age/provenance contradiction: add qualification-processing idempotency for crash/retry, harden scheduler exception survival/restart, terminal handling for disappeared/404 pools, then mature outcome evidence and persistent shadow trade lifecycle.
+- Provider note: current GeckoTerminal public documentation describes an approximate 10 calls/minute limit that may fluctuate; current code uses 6.5s global pacing plus multi-pool batching.
+
 ## New-chat protocol
 Read this file first, then NEXT_CHAT.md, then inspect the current main branch and current deployment state. The code and current DB/deployment state outrank stale prose. Do not reset research, repeat rejected branches, blindly copy reference thresholds, or make the user reconstruct prior work. Continue from the first unfinished verified milestone. Update this file whenever architecture, benchmark, validation status or roadmap materially changes.
