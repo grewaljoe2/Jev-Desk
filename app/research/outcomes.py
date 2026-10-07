@@ -20,8 +20,12 @@ class OutcomeWorker:
                         await complete_outcome_job(job["id"],Event(event_type="OUTCOME",token_id=job["token_id"],payload=payload))
                         await asyncio.sleep(3)
                     except Exception as e:
-                        print("OUTCOME_RETRY",job["id"],job["token_id"],type(e).__name__,str(e)[:300],flush=True)
-                        await defer_outcome_job(job["id"])
+                        msg=str(e)[:300]
+                        print("OUTCOME_RETRY",job["id"],job["token_id"],type(e).__name__,msg,flush=True)
+                        await defer_outcome_job(job["id"],minutes=15 if "429" in msg else 5)
+                        if "429" in msg:
+                            await asyncio.sleep(60)
+                            break
             except Exception as e:
                 print("OUTCOME_WORKER_ERROR",type(e).__name__,str(e)[:300],flush=True)
             await asyncio.sleep(self.seconds)
