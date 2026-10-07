@@ -30,6 +30,8 @@ class FastEntryWorker:
                                 snap=snap.model_copy(update={"observed_at":now,"raw":raw})
                                 event_id=await log_event(Event(event_type="FAST_ENTRY_SNAPSHOT",token_id=snap.token_id,arm=f"fast_{cohort}m",payload=snap.model_dump(mode="json")))
                                 ok,reason=fast_fact_filter(snap,float(cohort))
+                                # Fail closed if scarce API capacity made this observation too late for its named cohort.
+                                if ok and (snap.age_minutes is None or snap.age_minutes>cohort+1.0):ok,reason=False,"cohort_observation_late"
                                 await log_event(Event(event_type="FAST_ENTRY_DECISION",token_id=snap.token_id,arm=f"fast_{cohort}m",payload={"eligible":ok,"reason":reason,"cohort_minutes":cohort,"observed_age_minutes":snap.age_minutes,"baseline_event_id":event_id}))
                                 if ok:await open_fast_shadow_position(snap,event_id,cohort)
                                 await complete_fast_entry_job(j["id"])
