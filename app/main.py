@@ -2,12 +2,14 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from app.core.config import settings
 from app.providers.geckoterminal import GeckoTerminalDiscovery
+from app.providers.dexscreener import DexScreenerProvider
 from app.research.engine import process_snapshot
 from app.research.scheduler import ShadowScheduler,ingest_discovery
 from app.research.outcomes import OutcomeWorker
 from app.research.active_trades import ActiveTradeWorker
 from app.research.fast_entries import FastEntryWorker
 from app.research.qualification_worker import QualificationWorker
+from app.research.savip_dex import SavipDexWorker
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel,savip_candidate_pool
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
 from app.research.replay_pipeline import run_replay_research
@@ -16,6 +18,8 @@ from app.research.qualification import qualification_diagnostics
 
 app=FastAPI(title=settings.app_name,version=settings.version)
 provider=GeckoTerminalDiscovery()
+dex_provider=DexScreenerProvider()
+savip_dex_worker=SavipDexWorker(dex_provider)
 scheduler=ShadowScheduler(provider,30)
 outcome_worker=OutcomeWorker(provider)
 qualification_worker=QualificationWorker(provider)
@@ -30,6 +34,7 @@ async def startup():
     fast_entry_worker.start()
     active_trade_worker.start()
     outcome_worker.start()
+    savip_dex_worker.start()
 
 @app.get("/health")
 async def health():
@@ -80,7 +85,7 @@ async def fast_entry_data():
 async def savip_shadow_data():
     funnel=await savip_candidate_pool()
     survivors=funnel["free_cut_survivors"]
-    return {"ok":True,"mode":"savip_free_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":False,"dossier_enabled":False,"jev_enabled":False,"pick_enabled":False,"real_execution_enabled":False}
+    return {"ok":True,"mode":"savip_free_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":False,"dossier_enabled":False,"jev_enabled":False,"pick_enabled":False,"dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
