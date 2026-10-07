@@ -18,3 +18,4 @@ The cloud host will provide an HTTPS URL. Open it in Safari and use Share → Ad
 Never put API secrets in GitHub source files. Add them as environment variables in the cloud host.
 
 SQLite is currently local to the running container. Before continuous research, attach durable storage or migrate events to a managed database so redeployments cannot erase the research dataset.
+
