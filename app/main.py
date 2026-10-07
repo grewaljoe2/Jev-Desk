@@ -63,7 +63,7 @@ async def startup():
     # Shared discovery and qualification remain active for Savip.
     savip_dex_worker.start()
     savip_chain_worker.start()
-    savip_jev_validation_worker.start()
+    # One-shot validation disabled: recurring Jev worker owns real CHAIN passes.
     savip_jev_worker.start()
     savip_pick_worker.start()
     savip_shadow_entry_worker.start()
@@ -128,7 +128,7 @@ async def savip_discovery_accounting_data():
 @app.get("/savip-jev-ready")
 async def savip_jev_ready():
     row=await latest_chain_pass()
-    return {"ok":True,"jev_configured":typesafe_jev.configured,"chain_pass_candidate":bool(row),"token_id":row["token_id"] if row else None,"state":"ready_for_controlled_validation" if (typesafe_jev.configured and row) else ("waiting_for_chain_survivor" if typesafe_jev.configured else "jev_not_configured"),"paid_call_made":False,"real_execution_enabled":False}
+    return {"ok":True,"jev_configured":typesafe_jev.configured,"chain_pass_candidate":bool(row),"token_id":row["token_id"] if row else None,"state":"fresh_chain_pass_available" if (typesafe_jev.configured and row) else ("waiting_for_chain_survivor" if typesafe_jev.configured else "jev_not_configured"),"paid_call_made":False,"real_execution_enabled":False}
 
 @app.post("/savip-jev-validate-once")
 async def savip_jev_validate_once():
