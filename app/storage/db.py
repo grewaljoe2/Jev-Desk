@@ -108,13 +108,13 @@ async def fast_entry_summary():
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("SELECT cohort_minutes,count(*) FILTER(WHERE status='pending') AS pending,count(*) FILTER(WHERE status='done') AS checked FROM fast_entry_jobs GROUP BY cohort_minutes ORDER BY cohort_minutes")
         jobs=await cur.fetchall()
-        cur=await db.execute("""SELECT regexp_replace(p.arm,'[^0-9]','','g')::int AS cohort_minutes,a.policy,
+        cur=await db.execute("""SELECT CASE p.arm WHEN 'fast_1m' THEN 1 WHEN 'fast_3m' THEN 3 WHEN 'fast_5m' THEN 5 WHEN 'fast_10m' THEN 10 END AS cohort_minutes,a.policy,
           count(*) AS positions,count(*) FILTER(WHERE a.status='closed') AS closed,
           count(*) FILTER(WHERE a.status='closed' AND a.exit_price>a.entry_price) AS wins,
           COALESCE(sum(CASE WHEN a.status='closed' THEN 100.0*(a.exit_price/a.entry_price-1) ELSE 0 END),0) AS realized_pnl_usd
           FROM virtual_positions p JOIN shadow_exit_arms a ON a.position_id=p.id
           WHERE p.arm IN ('fast_1m','fast_3m','fast_5m','fast_10m')
-          GROUP BY cohort_minutes,a.policy ORDER BY cohort_minutes,a.policy""")
+          GROUP BY p.arm,a.policy ORDER BY cohort_minutes,a.policy""")
         return {"jobs":jobs,"cohorts":await cur.fetchall()}
 
 async def shadow_exit_summary():
