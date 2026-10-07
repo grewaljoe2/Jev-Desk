@@ -8,7 +8,7 @@ from app.research.outcomes import OutcomeWorker
 from app.research.active_trades import ActiveTradeWorker
 from app.research.fast_entries import FastEntryWorker
 from app.research.qualification_worker import QualificationWorker
-from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel
+from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel,savip_candidate_pool
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
 from app.research.replay_pipeline import run_replay_research
 from app.research.replay_diagnostics import replay_diagnostics
@@ -74,6 +74,12 @@ async def qualification_data():
 @app.get("/fast-entry-data")
 async def fast_entry_data():
     return {"ok":True,**(await fast_entry_summary()),"trades":await fast_shadow_positions_detail(200),"diagnostics":await fast_entry_diagnostics(),"discovery_funnel":await fast_entry_discovery_funnel(),"cohorts_minutes":[1,3,5,10],"control_minutes":15,"live_execution_enabled":False}
+
+
+@app.get("/savip-shadow-data")
+async def savip_shadow_data():
+    candidates=await savip_candidate_pool()
+    return {"ok":True,"mode":"candidate_observation_only","candidate_count":len(candidates),"candidates":candidates,"pick_enabled":False,"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
