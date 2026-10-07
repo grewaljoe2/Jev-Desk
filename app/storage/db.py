@@ -45,6 +45,27 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None,force=Fa
             if await cur.fetchone():return
         for h in (HORIZONS if horizons is None else tuple(horizons)):
             await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
+async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
+    """Open one research-only position from a contemporaneous qualified snapshot. No broker/wallet action."""
+    if not settings.database_url or snapshot.price_usd is None or snapshot.price_usd<=0:return None
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        async with db.transaction():
+            cur=await db.execute("SELECT id FROM virtual_positions WHERE token_id=%s AND arm='reference' AND status='open' LIMIT 1",(snapshot.token_id,))
+            if await cur.fetchone():return None
+            cur=await db.execute("INSERT INTO virtual_positions(token_id,arm,status,requested_size_usd,filled_size_usd,entry_price,opened_at) VALUES(%s,'reference','open',%s,%s,%s,%s) RETURNING id",(snapshot.token_id,notional_usd,notional_usd,snapshot.price_usd,snapshot.observed_at))
+            position_id=(await cur.fetchone())[0]
+            payload=json.dumps({"position_id":position_id,"baseline_event_id":baseline_event_id,"notional_usd":notional_usd,"entry_price":snapshot.price_usd,"price_basis":"provider_observed_price_proxy","research_only":True,"real_execution":False},default=str)
+            await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(%s,'SHADOW_ENTRY',%s,'reference',%s::jsonb)",(snapshot.observed_at,snapshot.token_id,payload))
+            return position_id
+
+async def shadow_position_summary():
+    if not settings.database_url:return {"open":0,"closed":0,"realized_pnl_usd":0.0}
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT count(*) FILTER(WHERE status='open'),count(*) FILTER(WHERE status='closed'),COALESCE(sum(CASE WHEN status='closed' AND entry_price>0 AND exit_price IS NOT NULL THEN filled_size_usd*(exit_price/entry_price-1) ELSE 0 END),0) FROM virtual_positions WHERE arm='reference'")
+        r=await cur.fetchone();return {"open":r[0],"closed":r[1],"realized_pnl_usd":float(r[2] or 0)}
+
 async def research_counts():
     if not settings.database_url:return {"storage":"sqlite","snapshots":0,"decisions":0,"outcomes":0,"pending":0}
     import psycopg
