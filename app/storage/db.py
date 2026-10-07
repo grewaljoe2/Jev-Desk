@@ -39,7 +39,8 @@ async def research_counts():
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         cur=await db.execute("SELECT count(*) FILTER(WHERE event_type='SNAPSHOT'),count(*) FILTER(WHERE event_type='DECISION'),count(*) FILTER(WHERE event_type='OUTCOME') FROM events"); a=await cur.fetchone()
         cur=await db.execute("SELECT count(*) FROM outcome_jobs WHERE status='pending'"); p=(await cur.fetchone())[0]
-        return {"storage":"postgres","snapshots":a[0],"decisions":a[1],"outcomes":a[2],"pending":p}
+        cur=await db.execute("SELECT count(*) FROM outcome_jobs WHERE status='pending' AND due_at<=NOW() AND COALESCE(next_attempt_at,due_at)<=NOW()"); due=(await cur.fetchone())[0]
+        return {"storage":"postgres","snapshots":a[0],"decisions":a[1],"outcomes":a[2],"pending":p,"due_now":due}
 async def recent_events(limit=50):
     if settings.database_url:
         import psycopg
