@@ -691,3 +691,21 @@ async def log_savip_lifecycle(event_type:str,token_id:str,payload:dict):
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES(%s,%s,'savip_reference',%s::jsonb)",(event_type,token_id,json.dumps(payload,default=str)));await db.commit()
+
+async def savip_pick_fingerprint_seen(jev_event_ids:list[int]):
+    if not settings.database_url:return False
+    import psycopg
+    fp=",".join(str(x) for x in sorted(jev_event_ids))
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT 1 FROM events WHERE event_type='SAVIP_PICK' AND payload_json->>'jev_fingerprint'=%s LIMIT 1",(fp,))
+        return bool(await cur.fetchone())
+
+async def latest_savip_risk_price(token_id:str):
+    if not settings.database_url:return None
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("""SELECT payload_json->'observation'->>'price_usd' FROM events
+          WHERE event_type='SAVIP_RISK' AND token_id=%s AND payload_json->'observation'->>'price_usd' IS NOT NULL
+          ORDER BY created_at DESC LIMIT 1""",(token_id,))
+        row=await cur.fetchone()
+        return float(row[0]) if row and row[0] else None
