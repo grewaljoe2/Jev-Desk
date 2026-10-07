@@ -4,7 +4,7 @@ from app.research.savip_jev_candidate import unjudged_chain_passes
 from app.research.savip_jev_evidence import build_evidence
 from app.research.savip_jev_adapter import run_typed_jev
 from app.research.savip_jev_questions import QUESTION_SETS,RULES
-from app.storage.db import claim_savip_jev,complete_savip_jev_claim,log_savip_jev
+from app.storage.db import claim_savip_jev,complete_savip_jev_claim,log_savip_jev,open_savip_positions
 
 class SavipJevWorker:
     def __init__(self,provider,seconds=900,cap=3):
