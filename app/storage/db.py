@@ -86,4 +86,4 @@ async def complete_outcome_job(job_id,event):
 async def defer_outcome_job(job_id,minutes=5,error=None):
     if not settings.database_url:return
     import psycopg
-    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s",(minutes,error,job_id))
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET next_attempt_at=NOW()+(%s * interval '1 minute'),attempts=attempts+1,last_error=%s WHERE id=%s AND status='pending'",(minutes,error,job_id))
