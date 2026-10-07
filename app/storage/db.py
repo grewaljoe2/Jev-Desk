@@ -113,7 +113,7 @@ async def qualification_replay_rows(limit=500):
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT j.baseline_event_id,b.payload_json AS snapshot_payload,jsonb_agg(o.payload_json ORDER BY o.created_at) FILTER(WHERE o.id IS NOT NULL) AS outcomes FROM outcome_jobs j JOIN events b ON b.id=j.baseline_event_id LEFT JOIN events o ON o.event_type='OUTCOME' AND (o.payload_json->>'baseline_event_id')::bigint=j.baseline_event_id WHERE j.timing_provenance='clean_v061' AND j.baseline_event_id IS NOT NULL AND b.payload_json->'raw'->>'qualification_job_id' IS NOT NULL GROUP BY j.baseline_event_id,b.payload_json ORDER BY j.baseline_event_id DESC LIMIT %s",(limit,))
+        cur=await db.execute("SELECT j.baseline_event_id,b.payload_json AS snapshot_payload,jsonb_agg(o.payload_json ORDER BY o.created_at) FILTER(WHERE o.id IS NOT NULL) AS outcomes FROM outcome_jobs j JOIN events b ON b.id=j.baseline_event_id LEFT JOIN events o ON o.event_type='OUTCOME' AND (o.payload_json->>'baseline_event_id')::bigint=j.baseline_event_id WHERE j.timing_provenance='clean_v061' AND j.baseline_event_id IS NOT NULL AND b.payload_json->'raw'->>'qualification_job_id' IS NOT NULL AND (b.payload_json->>'age_minutes')::double precision >= 15 GROUP BY j.baseline_event_id,b.payload_json ORDER BY j.baseline_event_id DESC LIMIT %s",(limit,))
         return await cur.fetchall()
 
 async def scoreable_snapshot_quality():
