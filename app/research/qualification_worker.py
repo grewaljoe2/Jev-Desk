@@ -13,6 +13,17 @@ class QualificationWorker:
             await defer_qualification_job(job["id"],2,"age_unavailable");return
         if snap.age_minutes < 15:
             wait=max(1,int(15-snap.age_minutes)+1);await defer_qualification_job(job["id"],wait,"waiting_for_min_age");return
+        # Freeze the entry observation time after the >=15m guard. Provider construction time
+        # can precede lock/pacing waits; qualification evidence must use the actual check time.
+        snap.observed_at=datetime.now(timezone.utc)
+        created=(snap.raw or {}).get("pool_created_at")
+        if created:
+            try:
+                born=datetime.fromisoformat(str(created).replace("Z","+00:00"))
+                snap.age_minutes=max(0.0,(snap.observed_at-born).total_seconds()/60.0)
+            except Exception:pass
+        if snap.age_minutes is None or snap.age_minutes < 15:
+            await defer_qualification_job(job["id"],1,"post_fetch_age_invariant");return
         now=datetime.now(timezone.utc)
         snap.raw["qualification_job_id"]=job["id"]
         snap.raw["qualification_due_at"]=job["due_at"].isoformat() if hasattr(job["due_at"],"isoformat") else str(job["due_at"])
