@@ -723,3 +723,41 @@ async def latest_savip_risk_price(token_id:str):
           ORDER BY created_at DESC LIMIT 1""",(token_id,))
         row=await cur.fetchone()
         return float(row[0]) if row and row[0] else None
+
+async def savip_discovery_accounting():
+    """Uncapped, read-only discovery telemetry; distinct from the 200-row FREE sample."""
+    if not settings.database_url:
+        return {"available":False,"reason":"postgres_unavailable"}
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as conn:
+        cur=await conn.execute("""WITH first_seen AS (
+            SELECT token_id, MIN(created_at) AS first_at
+            FROM events WHERE event_type='DISCOVERY' AND token_id IS NOT NULL
+            GROUP BY token_id
+          ), recent AS (
+            SELECT token_id, MAX(created_at) AS last_at
+            FROM events WHERE event_type='DISCOVERY'
+              AND created_at >= NOW() - INTERVAL '72 hours'
+              AND token_id IS NOT NULL GROUP BY token_id
+          )
+          SELECT
+            (SELECT COUNT(*) FROM events WHERE event_type='DISCOVERY') AS cumulative_observations,
+            (SELECT COUNT(*) FROM first_seen) AS cumulative_unique_tokens,
+            (SELECT COUNT(*) FROM recent) AS unique_tokens_72h,
+            (SELECT COUNT(*) FROM first_seen WHERE first_at >= NOW()-INTERVAL '15 minutes') AS first_seen_15m,
+            (SELECT COUNT(*) FROM first_seen WHERE first_at >= NOW()-INTERVAL '1 hour') AS first_seen_1h,
+            (SELECT COUNT(*) FROM first_seen WHERE first_at >= NOW()-INTERVAL '24 hours') AS first_seen_24h,
+            (SELECT MAX(created_at) FROM events WHERE event_type='DISCOVERY') AS last_discovery_at,
+            (SELECT MIN(created_at) FROM events WHERE event_type='DISCOVERY') AS first_discovery_at
+        """)
+        totals=dict(await cur.fetchone())
+        cur=await conn.execute("""SELECT split_part(token_id,':',1) AS chain,
+          COUNT(*) AS observations,COUNT(DISTINCT token_id) AS unique_tokens
+          FROM events WHERE event_type='DISCOVERY'
+          AND created_at >= NOW()-INTERVAL '24 hours'
+          GROUP BY 1 ORDER BY observations DESC""")
+        totals["networks_24h"]=[dict(row) for row in await cur.fetchall()]
+    totals["available"]=True
+    totals["scanned_metric_definition"]="most_recent_200_unique_discovered_tokens_in_72h"
+    return totals
