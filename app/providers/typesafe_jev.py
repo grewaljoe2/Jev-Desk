@@ -17,7 +17,7 @@ class TypeSafeJevProvider:
         if r.status_code==429:raise RuntimeError("typesafe_rate_limited")
         if r.status_code==529:raise RuntimeError("typesafe_overloaded")
         if r.status_code>=400:raise RuntimeError(f"typesafe_http_{r.status_code}")
-        return _flatten(r.json())
+        return _flatten(r.json(),include_social='social' in (questions or QUESTION_SETS))
 
     async def pick(self,candidates:list[dict])->dict:
         """One typed cross-candidate call. Deterministic thresholds stay in code."""
@@ -49,7 +49,7 @@ def _native_questions(groups):
             else:q[name]={"type":"noul","instructions":instruction}
     return q
 
-def _flatten(data):
+def _flatten(data,include_social=True):
     answers=data.get("answers") or {}
     def val(name,kind):
         a=answers.get(name) or {}
@@ -59,5 +59,5 @@ def _flatten(data):
     judgment={
       "market":{"concentration_is_exit_risk":val("concentration_is_exit_risk","noul"),"momentum_already_spent":val("momentum_already_spent","noul"),"liquidity_fits_ticket":val("liquidity_fits_ticket","noul"),"shape":val("shape","choice"),"sell_side_risk":val("sell_side_risk","choice")},
       "chain":{"dev_still_loaded":val("dev_still_loaded","noul"),"sellable_by_evidence":val("sellable_by_evidence","noul"),"crowd_probability":val("crowd_probability","noul")},
-      "social":{"account_is_the_project":val("account_is_the_project","noul"),"recycled_account":val("recycled_account","noul"),"audience_is_real":val("audience_is_real","noul"),"effort":val("effort","score")}}
+      "social":({"account_is_the_project":val("account_is_the_project","noul"),"recycled_account":val("recycled_account","noul"),"audience_is_real":val("audience_is_real","noul"),"effort":val("effort","score")} if include_social else None)}
     return {"judgment":judgment,"model":data.get("model"),"usage":data.get("usage")}

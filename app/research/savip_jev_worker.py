@@ -23,16 +23,18 @@ class SavipJevWorker:
             x_handle=payload.get("x_handle")
             if x_handle:
                 if self.x_provider is None or not getattr(self.x_provider,"configured",False):
-                    await complete_savip_jev_claim(row["chain_event_id"],"completed")
-                    self.last_error="exact_x_reader_not_configured";continue
-                x_observation=await self.x_provider.observe_exact(x_handle)
+                    self.last_error="exact_x_reader_not_configured_reduced_size"
+                else:
+                    try:x_observation=await self.x_provider.observe_exact(x_handle)
+                    except Exception as e:self.last_error=f"exact_x_reader_error:{type(e).__name__}"
                 # A public-reader outage/unavailable account is missing SOCIAL evidence,
                 # not a fabricated pass or hard reject. The entry stage applies Savip's
                 # published 0.60 missing-X size factor when x_observation remains absent.
                 if x_observation is None:
                     self.last_error="exact_x_observation_unavailable_reduced_size"
             evidence=build_evidence(payload,x_observation=x_observation)
-            result=await run_typed_jev(self.provider,evidence,QUESTION_SETS,RULES)
+            questions=QUESTION_SETS if x_observation is not None else {k:v for k,v in QUESTION_SETS.items() if k!="social"}
+            result=await run_typed_jev(self.provider,evidence,questions,RULES)
             await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
             # Do not repeatedly spend paid Jev calls on the same failed dossier.
             status="completed"

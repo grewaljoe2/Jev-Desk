@@ -26,13 +26,14 @@ class SocialJudgment(BaseModel):
 class SavipJudgment(BaseModel):
     market:MarketJudgment
     chain:ChainJudgment
-    social:SocialJudgment
+    social:SocialJudgment|None=None
 
 def soft_gate(j:SavipJudgment):
-    d={**j.market.model_dump(),**j.chain.model_dump(),**j.social.model_dump()}
+    d={**j.market.model_dump(),**j.chain.model_dump(),**(j.social.model_dump() if j.social is not None else {})}
     if d["shape"] in REJECT_SHAPES:return False,"shape"
     if d["sell_side_risk"] in REJECT_SELL_SIDE:return False,"sell_side"
     for name,(kind,cut) in SOFT.items():
+        if name not in d:continue  # No social judgment without exact-X evidence.
         v=d[name]
         if (kind=="max" and v>cut) or (kind=="min" and v<cut):return False,name
     return True,"pass"
