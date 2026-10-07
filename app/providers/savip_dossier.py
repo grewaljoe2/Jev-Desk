@@ -1,4 +1,5 @@
 """Savip dossier facts matching the published collector. Shadow research only."""
+import asyncio
 import httpx
 
 class SavipDossierProvider:
@@ -8,7 +9,11 @@ class SavipDossierProvider:
     async def fetch(self,chain,address):
         net=self.NET.get(chain)
         if not net:return None
-        r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info");r.raise_for_status()
+        r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info")
+        if r.status_code==429:
+            await asyncio.sleep(7)
+            r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info")
+        r.raise_for_status()
         a=((r.json().get("data") or {}).get("attributes") or {})
         holders=a.get("holders") or {};dist=holders.get("distribution_percentage") or {}
         return {
