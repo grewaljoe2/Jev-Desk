@@ -8,7 +8,7 @@ class SavipPickWorker:
         self.provider=provider;self.seconds=seconds;self.task=None
         self.state="waiting";self.last_error=None
     async def run_cycle(self):
-        rows=await recent_savip_soft_survivors()
+        if await open_savip_positions():\n            self.state="position_held";return\n        rows=await recent_savip_soft_survivors()\n        fp=[r["id"] for r in rows]\n        if fp and await savip_pick_fingerprint_seen(fp):\n            self.state="already_picked";return
         if not rows:self.state="no_survivors";return
         if len(rows)==1:
             p=single_survivor(rows[0]["token_id"]);p["accepted"]=True;p["token_id"]=rows[0]["token_id"];p["evidence"]=rows[0]["payload_json"].get("evidence");p["jev_fingerprint"]=",".join(str(x) for x in sorted(fp))
