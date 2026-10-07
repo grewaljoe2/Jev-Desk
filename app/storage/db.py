@@ -113,7 +113,7 @@ async def fast_entry_summary():
           count(*) FILTER(WHERE a.status='closed' AND a.exit_price>a.entry_price) AS wins,
           COALESCE(sum(CASE WHEN a.status='closed' THEN 100.0*(a.exit_price/a.entry_price-1) ELSE 0 END),0) AS realized_pnl_usd
           FROM virtual_positions p JOIN shadow_exit_arms a ON a.position_id=p.id
-          WHERE p.arm = ANY(%s)
+          WHERE p.arm IN ('fast_1m','fast_3m','fast_5m','fast_10m')
           GROUP BY cohort_minutes,a.policy ORDER BY cohort_minutes,a.policy""")
         return {"jobs":jobs,"cohorts":await cur.fetchall()}
 
