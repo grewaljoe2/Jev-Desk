@@ -1,7 +1,7 @@
 """Bounded Savip dossier/CHAIN worker. Shadow research only."""
 import asyncio
 from app.research.savip_trade_cut import exact_trade_cut
-from app.storage.db import savip_candidate_pool
+from app.storage.db import savip_candidate_pool,open_savip_positions
 from app.research.savip_chain_cut import evaluate_chain
 from app.core.config import settings
 
@@ -11,6 +11,7 @@ class SavipChainWorker:
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None
+        if await open_savip_positions():return
         funnel=await savip_candidate_pool(window_minutes=72*60)
         trade=await exact_trade_cut(funnel["free_cut_survivors"])
         for row in trade["survivors"][:self.cap]:

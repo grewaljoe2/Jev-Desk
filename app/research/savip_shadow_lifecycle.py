@@ -1,18 +1,18 @@
 """PRICE -> SIZE -> FILLS -> BOOK shadow entry lifecycle. No real order transport."""
 import asyncio
-from app.storage.db import latest_accepted_savip_pick,savip_pick_already_opened,log_savip_lifecycle,open_savip_positions
+from app.storage.db import latest_accepted_savip_pick,savip_pick_already_opened,log_savip_lifecycle,open_savip_positions,latest_savip_risk_price
 from app.research.savip_book import open_book_position,close_book_position
 from app.research.savip_shadow_execution import ticket_usd,simulated_market_fill
 from app.research.savip_risk import risk_decision
 
 class SavipShadowEntryWorker:
-    def __init__(self,seconds=60,bank_usd=1000.0):
-        self.seconds=seconds;self.bank_usd=bank_usd;self.task=None;self.state="waiting";self.last_error=None
+    def __init__(self,market_provider,seconds=60,bank_usd=1000.0):
+        self.market_provider=market_provider;self.seconds=seconds;self.bank_usd=bank_usd;self.task=None;self.state="waiting";self.last_error=None
     async def run_cycle(self):
         row=await latest_accepted_savip_pick()
         if not row or await savip_pick_already_opened(row["id"]):self.state="waiting";return
         p=row["payload_json"];evidence=(p.get("evidence") or {})
-        market=evidence.get("market") or {}
+        market=await self.market_provider.observe(row["token_id"]) or {}
         price=market.get("price_usd");liq=market.get("liquidity_usd")
         if not price or not liq:
             self.state="waiting_for_price";return
@@ -53,7 +53,7 @@ class SavipShadowRiskWorker:
                 decision=risk_decision(None,None,n)
             await log_savip_lifecycle("SAVIP_RISK",token,{"position_id":pos["id"],"decision":decision,"observation":obs,"real_execution":False})
             if decision["action"]=="close_100":
-                price=(obs or {}).get("price_usd")
+                price=(obs or {}).get("price_usd") or await latest_savip_risk_price(token)
                 if price and await close_book_position(pos["id"],price):
                     await log_savip_lifecycle("SAVIP_SHADOW_EXIT",token,{"position_id":pos["id"],"exit_price":price,"reason":decision["reason"],"deadline_seconds":decision.get("deadline_seconds"),"real_execution":False})
                     self.failures.pop(token,None);self.state="closed"
