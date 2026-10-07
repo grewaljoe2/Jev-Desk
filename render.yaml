@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: jev-desk
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: JEV_API_KEY
+        sync: false
+      - key: JEV_BASE_URL
+        sync: false
