@@ -85,7 +85,7 @@ async def fast_entry_data():
 async def savip_shadow_data():
     funnel=await savip_candidate_pool()
     survivors=funnel["free_cut_survivors"]
-    return {"ok":True,"mode":"savip_free_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":False,"dossier_enabled":False,"jev_enabled":False,"pick_enabled":False,"dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
+    return {"ok":True,"mode":"savip_trade_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"trade_cut_survivor_count":len(funnel.get("trade_cut_survivors",[])),"trade_cut_kills":funnel.get("trade_cut_kills",{}),"trade_cut_missing_fields":funnel.get("trade_cut_missing_fields",{}),"trade_cut_survivors":funnel.get("trade_cut_survivors",[])[:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":True,"dossier_enabled":False,"jev_enabled":False,"pick_enabled":False,"dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
