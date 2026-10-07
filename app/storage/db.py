@@ -52,6 +52,30 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None,force=Fa
             if await cur.fetchone():return
         for h in (HORIZONS if horizons is None else tuple(horizons)):
             await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
+async def savip_dex_targets(limit=25):
+    """Old-enough fresh Savip candidates needing DEX facts; bounded by published 25/cycle cap."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""WITH c AS (
+          SELECT DISTINCT ON(token_id) token_id,created_at,payload_json
+          FROM events WHERE event_type='DISCOVERY' AND created_at>=NOW()-interval '15 minutes'
+          ORDER BY token_id,created_at DESC
+        )
+        SELECT token_id,payload_json->>'chain' chain,payload_json->'raw'->>'pool_id' pool_id,payload_json
+        FROM c WHERE NULLIF(payload_json->>'age_minutes','')::double precision>=15
+          AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=c.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '15 minutes')
+        ORDER BY created_at LIMIT %s""",(limit,))
+        return await cur.fetchall()
+
+async def log_savip_dex(token_id,base_payload,dex):
+    if not settings.database_url:return
+    import psycopg,json
+    payload=dict(base_payload or {});payload.update({k:v for k,v in (dex or {}).items() if v is not None});payload["dex_enriched"]=True
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(NOW(),'SAVIP_DEX',%s,'savip_reference',%s::jsonb)",(token_id,json.dumps(payload,default=str)))
+
 async def savip_candidate_pool(window_minutes=15,limit=200):
     """Savip FREE CUT from fresh candidates using the freshest already-collected facts.
 
@@ -85,7 +109,7 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
         JOIN LATERAL (
           SELECT e2.event_type,e2.created_at,e2.payload_json
           FROM events e2
-          WHERE e2.token_id=c.token_id AND e2.event_type IN ('DISCOVERY','SNAPSHOT')
+          WHERE e2.token_id=c.token_id AND e2.event_type IN ('DISCOVERY','SNAPSHOT','SAVIP_DEX')
           ORDER BY e2.created_at DESC LIMIT 1
         ) o ON TRUE
         ORDER BY c.discovered_at DESC LIMIT %s""",(window_minutes,limit))
