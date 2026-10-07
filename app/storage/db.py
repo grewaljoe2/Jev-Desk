@@ -226,8 +226,35 @@ async def due_outcome_jobs(limit=120):
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,j.timing_provenance,j.baseline_event_id,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE (j.baseline_event_id IS NOT NULL AND id=j.baseline_event_id) OR (j.baseline_event_id IS NULL AND token_id=j.token_id AND event_type='SNAPSHOT') ORDER BY CASE WHEN j.baseline_event_id IS NOT NULL THEN 0 ELSE 1 END,id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() AND COALESCE(j.next_attempt_at,j.due_at)<=NOW() ORDER BY CASE WHEN e.payload_json->'raw'->>'qualification_job_id' IS NOT NULL AND (e.payload_json->>'age_minutes')::double precision>=15 AND EXISTS (SELECT 1 FROM events d WHERE d.event_type='DECISION' AND d.token_id=j.token_id AND d.arm='reference' AND d.payload_json->>'eligible'='true') THEN 0 WHEN e.payload_json->'raw'->>'qualification_job_id' IS NOT NULL AND (e.payload_json->>'age_minutes')::double precision>=15 THEN 1 WHEN j.timing_provenance='clean_v061' THEN 2 ELSE 3 END,j.due_at LIMIT %s",(limit,))
+        cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,j.timing_provenance,j.baseline_event_id,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE (j.baseline_event_id IS NOT NULL AND id=j.baseline_event_id) OR (j.baseline_event_id IS NULL AND token_id=j.token_id AND event_type='SNAPSHOT') ORDER BY CASE WHEN j.baseline_event_id IS NOT NULL THEN 0 ELSE 1 END,id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() AND COALESCE(j.next_attempt_at,j.due_at)<=NOW() ORDER BY CASE WHEN e.payload_json->'raw'->>'qualification_job_id' IS NOT NULL AND (e.payload_json->>'age_minutes')::double precision>=15 AND EXISTS (SELECT 1 FROM events d WHERE d.event_type='DECISION' AND d.token_id=j.token_id AND d.arm='reference' AND d.payload_json->>'eligible'='true') THEN 0 WHEN e.payload_json->'raw'->>'qualification_job_id' IS NOT NULL AND (e.payload_json->>'age_minutes')::double precision>=15 THEN 1 WHEN j.timing_provenance='clean_v061' THEN 2 ELSE 3 END,j.due_at DESC LIMIT %s",(limit,))
         return await cur.fetchall()
+async def expire_stale_outcome_jobs():
+    """Retire historical checks whose intended point-in-time window is already gone.
+
+    Tolerance scales with the requested horizon: 20% of horizon, with a 5 minute
+    floor and 60 minute cap. No provider call is spent on these jobs; evidence is
+    preserved as missed rather than pretending a late observation was on time.
+    """
+    if not settings.database_url:return 0
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("""UPDATE outcome_jobs SET status='missed',last_error='missed_observation_window'
+          WHERE status='pending' AND due_at < NOW() -
+            (LEAST(60.0,GREATEST(5.0,horizon_minutes*0.20)) * interval '1 minute')
+          RETURNING id""")
+        return len(await cur.fetchall())
+
+async def fast_entry_pressure():
+    """Time-sensitive sub-15m work that background historical checks must never outrank."""
+    if not settings.database_url:return {"due":0,"due_soon":0}
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("""SELECT
+          count(*) FILTER(WHERE status='pending' AND due_at<=NOW() AND COALESCE(next_attempt_at,due_at)<=NOW()),
+          count(*) FILTER(WHERE status='pending' AND due_at<=NOW()+interval '90 seconds' AND COALESCE(next_attempt_at,due_at)<=NOW()+interval '90 seconds')
+          FROM fast_entry_jobs""")
+        r=await cur.fetchone();return {"due":r[0],"due_soon":r[1]}
+
 async def due_outcome_group(limit=120):
     jobs=await due_outcome_jobs(limit)
     groups={}
