@@ -45,3 +45,19 @@ async def recent_events(limit=50):
             cur=await db.execute("SELECT * FROM events ORDER BY id DESC LIMIT %s",(limit,));return await cur.fetchall()
     async with aiosqlite.connect(settings.db_path) as db:
         db.row_factory=aiosqlite.Row;cur=await db.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?",(limit,));return [dict(r) for r in await cur.fetchall()]
+
+async def due_outcome_jobs(limit=12):
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE token_id=j.token_id AND event_type='SNAPSHOT' ORDER BY id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() ORDER BY j.due_at LIMIT %s",(limit,))
+        return await cur.fetchall()
+async def complete_outcome_job(job_id,event):
+    await log_event(event)
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET status='done' WHERE id=%s",(job_id,))
+async def defer_outcome_job(job_id,minutes=5):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:await db.execute("UPDATE outcome_jobs SET due_at=NOW()+(%s * interval '1 minute') WHERE id=%s",(minutes,job_id))
