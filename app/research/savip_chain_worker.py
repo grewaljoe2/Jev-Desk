@@ -1,5 +1,6 @@
 """Bounded Savip dossier/CHAIN worker. Shadow research only."""
 import asyncio
+import time
 from app.research.savip_trade_cut import exact_trade_cut
 from app.storage.db import savip_candidate_pool,open_savip_positions
 from app.research.savip_chain_cut import evaluate_chain
@@ -8,7 +9,7 @@ from app.core.config import settings
 class SavipChainWorker:
     def __init__(self,dossier,sol_chain,seconds=900,cap=3,on_pass=None):
         self.dossier=dossier;self.sol_chain=sol_chain;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.task=None
-        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock()
+        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock();self._next_dossier_retry_at=0.0
     async def run_cycle(self):
         if self._cycle_lock.locked():return
         async with self._cycle_lock:
@@ -18,6 +19,8 @@ class SavipChainWorker:
         if await open_savip_positions():return
         funnel=await savip_candidate_pool(window_minutes=72*60)
         trade=await exact_trade_cut(funnel["free_cut_survivors"])
+        if time.monotonic()<self._next_dossier_retry_at:
+            self.last_error="dossier_provider_cooldown";return
         for row in trade["survivors"][:self.cap]:
             self.last_checked+=1
             try:
@@ -41,6 +44,11 @@ class SavipChainWorker:
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+                if "provider_rate_limited_429" in str(e):
+                    # GeckoTerminal is shared with discovery; avoid repeated
+                    # dossier requests while its global 429 cooldown runs.
+                    self._next_dossier_retry_at=time.monotonic()+120.0
+                    break
     async def _persist(self,token_id,d,ok,reason):
         if not settings.database_url:return
         import psycopg,json
