@@ -53,36 +53,39 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None,force=Fa
         for h in (HORIZONS if horizons is None else tuple(horizons)):
             await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
 async def savip_candidate_pool(window_minutes=15,limit=50):
-    """Read-only candidate set from contemporaneous qualified 15m snapshots.
+    """Read-only continuous discovery candidate set for the savip comparison arm.
 
-    This does not pick or trade. It exposes the survivor set needed for a later
-    multi-candidate PICK arm without contaminating the existing 15m/Fast controls.
+    Unlike our 15m control, this pool starts from fresh DISCOVERY observations and
+    applies the same deterministic fact gate without a minimum-age requirement.
+    It does not PICK or trade; missing facts fail closed and are reported by the
+    diagnostic endpoint.
     """
     if not settings.database_url:return []
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("""WITH qualified AS (
+        cur=await db.execute("""WITH fresh AS (
           SELECT DISTINCT ON (e.token_id)
-            e.token_id,e.created_at AS qualified_at,
-            NULLIF(e.payload_json->>'baseline_event_id','')::bigint AS baseline_event_id
+            e.id AS discovery_event_id,e.token_id,e.created_at AS discovered_at,e.payload_json
           FROM events e
-          WHERE e.event_type='DECISION' AND e.arm='reference'
-            AND COALESCE((e.payload_json->>'eligible')::boolean,false)=true
+          WHERE e.event_type='DISCOVERY'
             AND e.created_at>=NOW()-(%s * interval '1 minute')
           ORDER BY e.token_id,e.created_at DESC
         )
-        SELECT q.token_id,q.qualified_at,q.baseline_event_id,
-          s.payload_json->>'chain' AS chain,
-          NULLIF(s.payload_json->>'price_usd','')::double precision AS price_usd,
-          NULLIF(s.payload_json->>'liquidity_usd','')::double precision AS liquidity_usd,
-          NULLIF(s.payload_json->>'volume_h24_usd','')::double precision AS volume_h24_usd,
-          NULLIF(s.payload_json->>'mcap_usd','')::double precision AS mcap_usd,
-          NULLIF(s.payload_json->>'buys_h1','')::integer AS buys_h1,
-          NULLIF(s.payload_json->>'sells_h1','')::integer AS sells_h1
-        FROM qualified q
-        JOIN events s ON s.id=q.baseline_event_id
-        ORDER BY q.qualified_at DESC LIMIT %s""",(window_minutes,limit))
+        SELECT discovery_event_id,token_id,discovered_at,
+          payload_json->>'chain' AS chain,
+          NULLIF(payload_json->>'age_minutes','')::double precision AS age_minutes,
+          NULLIF(payload_json->>'price_usd','')::double precision AS price_usd,
+          NULLIF(payload_json->>'liquidity_usd','')::double precision AS liquidity_usd,
+          NULLIF(payload_json->>'volume_h24_usd','')::double precision AS volume_h24_usd,
+          NULLIF(payload_json->>'mcap_usd','')::double precision AS mcap_usd,
+          NULLIF(payload_json->>'trades_h24','')::integer AS trades_h24,
+          NULLIF(payload_json->>'buys_h1','')::integer AS buys_h1,
+          NULLIF(payload_json->>'sells_h1','')::integer AS sells_h1,
+          NULLIF(payload_json->>'holders','')::integer AS holders,
+          NULLIF(payload_json->>'top_wallet_fraction','')::double precision AS top_wallet_fraction,
+          NULLIF(payload_json->>'top10_fraction','')::double precision AS top10_fraction
+        FROM fresh ORDER BY discovered_at DESC LIMIT %s""",(window_minutes,limit))
         return await cur.fetchall()
 
 async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
