@@ -10,7 +10,8 @@ class DexScreenerProvider:
         pairs=[(p or "").split("_",1)[-1] for p in pool_ids]
         if not cid or not pairs or len(pairs)>20 or any(not p or "," in p or "/" in p for p in pairs):
             raise ValueError("invalid_dex_batch")
-        r=await self._client.get(f"{self.BASE}/{cid}/{\",\".join(pairs)}")
+        pair_path=",".join(pairs)
+        r=await self._client.get(f"{self.BASE}/{cid}/{pair_path}")
         r.raise_for_status()
         rows=r.json().get("pairs") or []
         by_pair={str(x.get("pairAddress","")).lower():x for x in rows if x.get("pairAddress")}
