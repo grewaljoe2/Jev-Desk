@@ -10,7 +10,9 @@ class SavipRiskMarketProvider:
         from psycopg.rows import dict_row
         async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
             cur=await db.execute("""SELECT payload_json FROM events WHERE token_id=%s
-              AND event_type IN ('SAVIP_CHAIN','SAVIP_DEX') ORDER BY created_at DESC LIMIT 1""",(token_id,))
+              AND event_type IN ('SAVIP_CHAIN','SAVIP_DEX')
+              AND (payload_json->>'pool_id' IS NOT NULL OR payload_json->>'pair_address' IS NOT NULL)
+              ORDER BY created_at DESC LIMIT 1""",(token_id,))
             row=await cur.fetchone()
         if not row:return None
         p=row["payload_json"];chain=p.get("chain");pool=p.get("pool_id") or p.get("pair_address")
