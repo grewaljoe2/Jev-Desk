@@ -56,6 +56,12 @@ async def replay_report():
     scoreable=int(ref.get("eligible",0))+int(ref.get("rejected",0))
     return {"ok":True,"evidence":"forward_clean","sample_count":len(samples),"scoreable_sample_count":scoreable,"qualified_sample_count":int(ref.get("eligible",0)),"unscorable_sample_count":int(ref.get("unscorable",0)),"sufficient_for_strategy_conclusion":scoreable>=100,**report,"diagnostics":diag,"qualification":q,"live_execution_enabled":False}
 
+@app.get("/qualification-data")
+async def qualification_data():
+    samples=await load_clean_replay_samples(500)
+    q=qualification_diagnostics(samples)
+    return {"ok":True,"sample_count":len(samples),"qualification":q,"live_execution_enabled":False}
+
 @app.get("/",response_class=HTMLResponse)
 async def dashboard():return HTMLResponse(DASHBOARD)
 
