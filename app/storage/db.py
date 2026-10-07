@@ -143,6 +143,23 @@ async def shadow_exit_summary():
             r["profit_factor"]=(gp/gl) if gl>0 else (None if gp==0 else "inf")
         return rows
 
+async def fast_entry_diagnostics():
+    """Explain whether fast cohorts are empty because of filters, lateness, or backlog."""
+    if not settings.database_url:return {"decisions":[],"jobs":[]}
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT arm,payload->>'reason' AS reason,count(*) AS n,
+          avg(NULLIF(payload->>'observed_age_minutes','')::double precision) AS avg_observed_age_minutes
+          FROM events WHERE event_type='FAST_ENTRY_DECISION'
+          GROUP BY arm,payload->>'reason' ORDER BY arm,n DESC""")
+        decisions=await cur.fetchall()
+        cur=await db.execute("""SELECT cohort_minutes,status,count(*) AS n,
+          min(due_at) FILTER(WHERE status='pending') AS oldest_pending_due_at,
+          max(attempts) AS max_attempts
+          FROM fast_entry_jobs GROUP BY cohort_minutes,status ORDER BY cohort_minutes,status""")
+        return {"decisions":decisions,"jobs":await cur.fetchall()}
+
 async def fast_shadow_positions_detail(limit=200):
     """Individual forward fast-entry positions, kept separate from the 15m control ledger."""
     if not settings.database_url:return []
