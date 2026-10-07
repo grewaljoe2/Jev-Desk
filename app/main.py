@@ -10,7 +10,7 @@ from app.research.active_trades import ActiveTradeWorker
 from app.research.fast_entries import FastEntryWorker
 from app.research.qualification_worker import QualificationWorker
 from app.research.savip_dex import SavipDexWorker
-from app.research.savip_trade_cut import normalize_trade_cut
+from app.research.savip_trade_cut import exact_trade_cut
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel,savip_candidate_pool
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
 from app.research.replay_pipeline import run_replay_research
@@ -84,9 +84,10 @@ async def fast_entry_data():
 
 @app.get("/savip-shadow-data")
 async def savip_shadow_data():
-    funnel=normalize_trade_cut(await savip_candidate_pool(window_minutes=72*60))
+    funnel=await savip_candidate_pool(window_minutes=72*60)
     survivors=funnel["free_cut_survivors"]
-    return {"ok":True,"mode":"savip_trade_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"trade_cut_survivor_count":len(funnel.get("trade_cut_survivors",[])),"trade_cut_kills":funnel.get("trade_cut_kills",{}),"trade_cut_missing_fields":funnel.get("trade_cut_missing_fields",{}),"trade_cut_survivors":funnel.get("trade_cut_survivors",[])[:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":True,"dossier_enabled":False,"jev_enabled":False,"pick_enabled":False,"dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
+    trade=await exact_trade_cut(survivors)
+    return {"ok":True,"mode":"savip_trade_cut_shadow_v1","cycle_minutes":15,"candidate_source":"fresh_discovery","scanned":funnel["scanned"],"free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"trade_cut_survivor_count":len(trade["survivors"]),"trade_cut_kills":trade["kills"],"trade_cut_missing_fields":trade["missing_fields"],"trade_cut_survivors":trade["survivors"][:25],"dossier_cap_per_cycle":3,"trade_cut_enabled":True,"dossier_enabled":False,"jev_enabled":False,"pick_enabled":False,"dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
