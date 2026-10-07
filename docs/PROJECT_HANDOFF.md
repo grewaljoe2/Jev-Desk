@@ -187,3 +187,57 @@ Production policy changed so fresh 1m/3m/5m/10m and 15m entry observations outra
 
 ### Next-session priority
 Verify production behavior after the fresh-first deployment: Fast/15m timing lateness, 429 frequency, discovery continuity, active-position marking, and whether the historical due backlog falls as stale jobs become missed. Do not change filters merely to manufacture Fast trades. If provider contention remains, continue the planned centralized shared REST observation/batching architecture rather than returning to per-worker sleep/priority patches. Keep 15m control alive and real trading OFF.
+
+## 2026-10-07 current authoritative Savip/Jev checkpoint
+This section supersedes older deployment/status/roadmap sections above where they conflict.
+
+### Verified production
+- Current verified LIVE main commit: `2791d58c971d6ce5236b64fa9bf42289bf68ada0` (PR #126, Restore Savip shadow trades card).
+- Render deployment `dep-db3bd58m7kps73dn6skg` finished LIVE at 2026-10-07T21:16:54.240874Z.
+- Production remains SHADOW ONLY. Real execution is OFF.
+- PR #123 removed the orphaned JavaScript tail after the DASHBOARD triple quote that caused repeated Render startup SyntaxErrors.
+- PR #124 made the Savip path event-driven: one completed DEX cycle wakes CHAIN once; a successful CHAIN pass immediately wakes Jev; a Jev soft-pass immediately wakes PICK. Published thresholds were not loosened.
+- PR #124 also fixes the earlier callback-per-enriched-row behavior that could invoke CHAIN repeatedly inside one DEX cycle. The dossier cap remains 3 per bounded CHAIN cycle.
+- Current entry worker already has a held-position guard: if any Savip reference position is open, a second accepted token cannot open.
+- PR #126 restored the missing `svtrades` dashboard container. The missing DOM node had caused the Savip refresh JavaScript to throw, making FREE CUT evidence appear unavailable even while upper metrics loaded. Savip now has a BOOK trade card for status, filled size, entry, last price and P&L.
+
+### Savip published-reference architecture currently being preserved
+COLLECT -> FREE CUT -> TRADE CUT -> CHAIN/dossier -> typed Jev judgments -> soft gates -> PICK -> PRICE/SIZE -> FILLS -> persistent BOOK -> 5-minute RISK -> exit -> fresh cycle/re-entry.
+- Published hard FREE rules: age 15m-72h; liquidity >= $12k; volume24 >= $40k; mcap $60k-$8m.
+- TRADE CUT: pair required; trades24 >=150; reject no-sells condition when sells_h1==0 and buys_h1>20.
+- CHAIN: top wallet <=5%; top10 <=60%; holders >=80; Solana mint/freeze authority checks; BSC honeypot check.
+- Dossier cap 3/cycle; DEX target cap 25/cycle; main Savip cycle 15 minutes.
+- One held position blocks the Savip decision/entry path. Re-entry requires exit plus a fresh cycle/win.
+- Multiple soft survivors use Jev PICK plus worth-trading/confidence gates. Do not loosen gates to manufacture trades.
+- Exact-X boundary remains strict: SOCIAL may only use the exact project/on-chain X handle; no similar-handle substitution.
+- Actual X collection is not yet active; missing-X handling must remain explicit rather than fabricated.
+- The TypeSafe/Jev adapter is configured server-side; never expose its API key. Do not claim a paid Jev judgment completed unless production evidence confirms it.
+
+### Current observed pipeline evidence
+- A genuine CHAIN pass has previously been observed in production (checked 1 / passed 1), proving the deterministic path can reach the Jev boundary.
+- A later mobile observation showed SCANNED 200, FREE CUT 3, WAITING AGE 54, CHAIN checked 1 / passed 0, Jev ARMED and PICK ARMED. This is valid no-trade behavior; do not loosen filters.
+- A FREE-vs-TRADE age discrepancy has been observed on the same token (FREE age about 37m versus enriched TRADE age about 6.5m). Audit the age source/provenance before trusting downstream age display/evidence.
+
+### Open reliability/fidelity work
+1. Persist Savip RISK market-data failure counts. They are currently in memory, so a process restart can reset the published retry-twice/third-failure close sequence. Also ensure a third failure can resolve a safe close price without fabricating one.
+2. Audit DexScreener 429 handling/pacing. Do not invent undocumented rate limits.
+3. Audit Jev claim failure/retry semantics: failed claims currently risk becoming permanently excluded rather than safely retried.
+4. Verify PICK fingerprint IDs are the intended Jev event IDs and preserve fresh-cycle/re-entry idempotency.
+5. Audit the hardcoded shadow bank `bank_usd=1000.0` against the intended persistent capital/BOOK source before changing it.
+6. Fix stale readiness/status reporting such as hardcoded paid-call state; status must reflect observed truth.
+7. Audit SQLite/dev uniqueness versus repeated closed positions/re-entry semantics.
+8. Add holder-count fallback only from a trustworthy point-in-time source; never fabricate missing holder facts.
+9. Guard the Savip-specific earliest scan/enrichment stage while a position is held if strict published “entire scan skipped” fidelity is required.
+10. Replace newest-200 candidate truncation with a bounded persistent/queued 72h universe so older eligible candidates cannot starve.
+11. Audit the FREE-vs-TRADE age-source discrepancy.
+12. Refactor the giant inline DASHBOARD before further large UI changes; prior narrow string edits caused repeated source corruption.
+13. After system correctness is complete, build the planned mobile “living desk” visualization driven only by real backend events/states. Do not fake agent activity or copy Savip artwork/assets.
+
+### Process rules
+- Code/deployment/DB observations outrank stale prose.
+- Re-read exact branch source after every connector write before merge.
+- Before deploy, ensure `app/main.py` has exactly one intended DASHBOARD closing triple quote and no orphaned JavaScript tail.
+- Do not weaken security or Postgres network allowlists for inspection.
+- Do not mix MT5 research into Jev Desk.
+- Real execution stays OFF until a separate explicit post-validation decision.
+
