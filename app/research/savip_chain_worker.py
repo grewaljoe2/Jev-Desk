@@ -1,7 +1,7 @@
 """Bounded Savip dossier/CHAIN worker. Shadow research only."""
 import asyncio
 from app.research.savip_trade_cut import exact_trade_cut
-from app.storage.db import savip_candidate_pool
+from app.storage.db import savip_candidate_pool,open_savip_positions
 from app.research.savip_chain_cut import evaluate_chain
 from app.core.config import settings
 
