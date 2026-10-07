@@ -68,20 +68,20 @@ async def recent_events(limit=50):
     async with aiosqlite.connect(settings.db_path) as db:
         db.row_factory=aiosqlite.Row;cur=await db.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?",(limit,));return [dict(r) for r in await cur.fetchall()]
 
-async def due_outcome_jobs(limit=12):
+async def due_outcome_jobs(limit=120):
+    """Prioritize corrected >=15m entry cohorts and likely-qualified evidence before background cohorts."""
     if not settings.database_url:return []
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,j.timing_provenance,j.baseline_event_id,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE (j.baseline_event_id IS NOT NULL AND id=j.baseline_event_id) OR (j.baseline_event_id IS NULL AND token_id=j.token_id AND event_type='SNAPSHOT') ORDER BY CASE WHEN j.baseline_event_id IS NOT NULL THEN 0 ELSE 1 END,id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() AND COALESCE(j.next_attempt_at,j.due_at)<=NOW() ORDER BY CASE WHEN j.timing_provenance='clean_v061' AND e.payload_json->>'age_minutes' IS NOT NULL THEN 0 WHEN j.timing_provenance='clean_v061' THEN 1 ELSE 2 END,j.due_at LIMIT %s",(limit,))
+        cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,j.timing_provenance,j.baseline_event_id,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE (j.baseline_event_id IS NOT NULL AND id=j.baseline_event_id) OR (j.baseline_event_id IS NULL AND token_id=j.token_id AND event_type='SNAPSHOT') ORDER BY CASE WHEN j.baseline_event_id IS NOT NULL THEN 0 ELSE 1 END,id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() AND COALESCE(j.next_attempt_at,j.due_at)<=NOW() ORDER BY CASE WHEN e.payload_json->'raw'->>'qualification_job_id' IS NOT NULL AND (e.payload_json->>'age_minutes')::double precision>=15 THEN 0 WHEN j.timing_provenance='clean_v061' THEN 1 ELSE 2 END,j.due_at LIMIT %s",(limit,))
         return await cur.fetchall()
-async def due_outcome_group(limit=4):
-    jobs=await due_outcome_jobs(limit*10)
+async def due_outcome_group(limit=120):
+    jobs=await due_outcome_jobs(limit)
     groups={}
     for job in jobs:
         base=job["payload_json"];pool_id=(base.get("raw") or {}).get("pool_id");key=(base.get("chain"),pool_id)
         if not pool_id:continue
-        if key not in groups and len(groups)>=limit:continue
         groups.setdefault(key,[]).append(job)
     return list(groups.values())
 async def complete_outcome_job(job_id,event):
