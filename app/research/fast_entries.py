@@ -10,9 +10,11 @@ class FastEntryWorker:
     async def loop(self):
         while True:
             try:
-                if (await qualification_pressure())["due"]:
-                    await asyncio.sleep(3);continue
-                jobs=await due_fast_entry_jobs(120)
+                # Do not starve sub-15m observations behind a persistent 15m backlog.
+                # Both entry workers use the provider's single paced request lock, so allowing
+                # Fast to enqueue work here preserves provider safety while giving expiring
+                # 1m/3m/5m/10m observations a chance to be measured.
+                jobs=await due_fast_entry_jobs(30)
                 by_chain={}
                 for j in jobs:by_chain.setdefault(j["chain"],[]).append(j)
                 for chain,items in by_chain.items():
