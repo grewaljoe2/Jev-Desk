@@ -617,6 +617,22 @@ async def log_savip_jev(token_id,result,evidence):
         await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_JEV',%s,'savip_reference',%s::jsonb)",(token_id,payload))
         await db.commit()
 
+async def recent_savip_jev_outcomes(limit:int=20):
+    """Read-only per-candidate Jev results; distinguishes soft rejection from provider failure."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT id,token_id,created_at,
+          payload_json->'result'->>'reason' AS failure_reason,
+          payload_json->'result'->>'soft_reason' AS soft_reason,
+          payload_json->'result'->>'error' AS provider_error,
+          payload_json->'result'->>'ok' AS judgment_ok,
+          payload_json->'result'->>'soft_pass' AS soft_pass
+          FROM events WHERE event_type='SAVIP_JEV'
+          ORDER BY created_at DESC LIMIT %s""",(max(1,min(limit,50)),))
+        return [dict(row) for row in await cur.fetchall()]
+
 async def claim_savip_jev(chain_event_id:int,token_id:str):
     if not settings.database_url:return False
     import psycopg
