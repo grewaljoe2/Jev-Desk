@@ -7,8 +7,8 @@ from app.research.savip_jev_questions import QUESTION_SETS,RULES
 from app.storage.db import claim_savip_jev,complete_savip_jev_claim,log_savip_jev,open_savip_positions
 
 class SavipJevWorker:
-    def __init__(self,provider,seconds=900,cap=3,on_pass=None):
-        self.provider=provider;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.task=None
+    def __init__(self,provider,seconds=900,cap=3,on_pass=None,x_provider=None):
+        self.provider=provider;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.x_provider=x_provider;self.task=None
         self.last_checked=0;self.last_passed=0;self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_passed=0;self.last_error=None
@@ -17,7 +17,18 @@ class SavipJevWorker:
         for row in await unjudged_chain_passes(self.cap):
             if not await claim_savip_jev(row["chain_event_id"],row["token_id"]):continue
             self.last_checked+=1
-            evidence=build_evidence(row["payload_json"])
+            payload=row["payload_json"]
+            x_observation=None
+            x_handle=payload.get("x_handle")
+            if x_handle:
+                if self.x_provider is None or not getattr(self.x_provider,"configured",False):
+                    await complete_savip_jev_claim(row["chain_event_id"],"failed")
+                    self.last_error="exact_x_reader_not_configured";continue
+                x_observation=await self.x_provider.observe_exact(x_handle)
+                if x_observation is None:
+                    await complete_savip_jev_claim(row["chain_event_id"],"failed")
+                    self.last_error="exact_x_observation_unavailable";continue
+            evidence=build_evidence(payload,x_observation=x_observation)
             result=await run_typed_jev(self.provider,evidence,QUESTION_SETS,RULES)
             await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
             status="completed" if result.get("ok") else "failed"
