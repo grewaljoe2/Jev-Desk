@@ -106,7 +106,7 @@ async def fast_entry_summary():
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT cohort_minutes,count(*) FILTER(WHERE status='pending') AS pending,count(*) FILTER(WHERE status='done') AS checked FROM fast_entry_jobs GROUP BY cohort_minutes ORDER BY cohort_minutes")
+        cur=await db.execute("SELECT cohort_minutes,count(*) FILTER(WHERE status='pending') AS pending,count(*) FILTER(WHERE status='done') AS checked,count(*) FILTER(WHERE status='missed') AS missed FROM fast_entry_jobs GROUP BY cohort_minutes ORDER BY cohort_minutes")
         jobs=await cur.fetchall()
         cur=await db.execute("""SELECT CASE p.arm WHEN 'fast_1m' THEN 1 WHEN 'fast_3m' THEN 3 WHEN 'fast_5m' THEN 5 WHEN 'fast_10m' THEN 10 END AS cohort_minutes,a.policy,
           count(*) AS positions,count(*) FILTER(WHERE a.status='closed') AS closed,
@@ -156,6 +156,7 @@ async def fast_entry_diagnostics():
         decisions=await cur.fetchall()
         cur=await db.execute("""SELECT cohort_minutes,status,count(*) AS n,
           min(due_at) FILTER(WHERE status='pending') AS oldest_pending_due_at,
+          max(due_at) FILTER(WHERE status='pending') AS newest_pending_due_at,
           max(attempts) AS max_attempts
           FROM fast_entry_jobs GROUP BY cohort_minutes,status ORDER BY cohort_minutes,status""")
         return {"decisions":decisions,"jobs":await cur.fetchall()}
@@ -362,12 +363,29 @@ async def schedule_fast_entry(token_id,chain,pool_id,cohort_minutes,due_at):
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("INSERT INTO fast_entry_jobs(token_id,chain,pool_id,cohort_minutes,due_at,status) VALUES(%s,%s,%s,%s,%s,'pending') ON CONFLICT(chain,pool_id,cohort_minutes) DO NOTHING",(token_id,chain,pool_id,cohort_minutes,due_at))
 
+async def expire_stale_fast_entry_jobs(grace_minutes=1.0):
+    """Mark expired point-in-time Fast observations missed without spending provider calls."""
+    if not settings.database_url:return 0
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("""UPDATE fast_entry_jobs
+          SET status='missed',completed_at=NOW(),last_error='missed_observation_window',next_attempt_at=NULL
+          WHERE status='pending' AND due_at < NOW()-(%s * interval '1 minute')
+          RETURNING id""",(grace_minutes,))
+        return len(await cur.fetchall())
+
 async def due_fast_entry_jobs(limit=120):
+    """Return only still-useful Fast observations, ordered by nearest expiry."""
     if not settings.database_url:return []
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("SELECT * FROM fast_entry_jobs WHERE status='pending' AND due_at<=NOW() AND COALESCE(next_attempt_at,due_at)<=NOW() ORDER BY due_at LIMIT %s",(limit,))
+        cur=await db.execute("""SELECT * FROM fast_entry_jobs
+          WHERE status='pending' AND due_at<=NOW()
+            AND due_at>=NOW()-interval '1 minute'
+            AND COALESCE(next_attempt_at,due_at)<=NOW()
+          ORDER BY (due_at+interval '1 minute') ASC,cohort_minutes ASC,id ASC
+          LIMIT %s""",(limit,))
         return await cur.fetchall()
 
 async def complete_fast_entry_job(job_id):
