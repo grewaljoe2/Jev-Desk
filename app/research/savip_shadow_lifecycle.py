@@ -5,6 +5,8 @@ from app.storage.db import latest_accepted_savip_pick,savip_pick_already_opened,
 from app.research.savip_book import open_book_position,close_book_position
 from app.research.savip_shadow_execution import ticket_usd,simulated_market_fill
 from app.research.savip_risk import risk_decision
+from app.research.savip_pick import PickResult
+from pydantic import ValidationError
 
 class SavipShadowEntryWorker:
     def __init__(self,market_provider,seconds=60,bank_usd=1000.0):
@@ -20,6 +22,13 @@ class SavipShadowEntryWorker:
         p=row["payload_json"];evidence=(p.get("evidence") or {})
         pick=(p.get("pick") or {}).get("winner") or {}
         if not pick or pick.get("token_id")!=row["token_id"]:
+            self.state="invalid_pick";return
+        try:
+            decision=PickResult.model_validate(p.get("pick") or {})
+            accepted,_=decision.accepted()
+        except (ValidationError,ValueError,TypeError):
+            accepted=False
+        if not accepted:
             self.state="invalid_pick";return
         market=await self.market_provider.observe(row["token_id"]) or {}
         price=market.get("price_usd");liq=market.get("liquidity_usd")
