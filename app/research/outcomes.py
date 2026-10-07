@@ -3,46 +3,42 @@ from datetime import datetime,timezone
 from app.core.models import Event
 from app.storage.db import due_outcome_group,complete_outcome_job,defer_outcome_job,qualification_pressure
 class OutcomeWorker:
-    def __init__(self,provider,seconds=60):self.provider=provider;self.seconds=seconds;self.task=None
+    def __init__(self,provider,seconds=15):self.provider=provider;self.seconds=seconds;self.task=None
     async def loop(self):
         while True:
             try:
-                pressure=await qualification_pressure()
-                # Protect the time-sensitive >=15m entry snapshot. Background outcomes yield
-                # whenever an entry check is due or will become due within 90 seconds.
-                if pressure["due_soon"]:
-                    await asyncio.sleep(10)
-                    continue
-                for group in await due_outcome_group(limit=4):
-                    if (await qualification_pressure())["due_soon"]:
-                        break
-                    job=group[0]
-                    try:
-                        base=job["payload_json"];chain=base.get("chain");pool_id=(base.get("raw") or {}).get("pool_id")
-                        snap=await self.provider.fetch_pool(chain,pool_id)
-                        if not snap:
-                            for due_job in group:await defer_outcome_job(due_job["id"],error="pool_not_available")
-                            continue
-                        now=datetime.now(timezone.utc);baseline=base.get("observed_at")
-                        actual=None
-                        if baseline:
-                            actual=(now-datetime.fromisoformat(str(baseline).replace("Z","+00:00"))).total_seconds()/60
-                        for due_job in group:
-                            due_base=due_job["payload_json"];due_baseline=due_base.get("observed_at");due_actual=None
-                            if due_baseline:due_actual=(now-datetime.fromisoformat(str(due_baseline).replace("Z","+00:00"))).total_seconds()/60
-                            payload={"requested_horizon_minutes":due_job["horizon_minutes"],"actual_elapsed_minutes":due_actual,"scheduled_due_at":due_job["due_at"],"baseline_event_id":due_job["baseline_event_id"],"observed_at":now,"observation":snap.model_dump(mode="json")}
-                            await complete_outcome_job(due_job["id"],Event(event_type="OUTCOME",token_id=due_job["token_id"],payload=payload))
-                        # Provider enforces global pacing; do not double-throttle successful calls.
-                        await asyncio.sleep(0)
-                    except Exception as e:
-                        msg=str(e)[:300]
-                        print("OUTCOME_RETRY",job["id"],job["token_id"],type(e).__name__,msg,flush=True)
-                        for due_job in group:await defer_outcome_job(due_job["id"],minutes=15 if "429" in msg else 5,error=msg)
-                        if "429" in msg:
-                            await asyncio.sleep(60)
-                            break
-            except Exception as e:
-                print("OUTCOME_WORKER_ERROR",type(e).__name__,str(e)[:300],flush=True)
+                if (await qualification_pressure())["due_soon"]:
+                    await asyncio.sleep(5);continue
+                groups=await due_outcome_group(limit=120)
+                by_chain={}
+                for group in groups:
+                    base=group[0]["payload_json"];chain=base.get("chain");pool_id=(base.get("raw") or {}).get("pool_id")
+                    if chain and pool_id:by_chain.setdefault(chain,[]).append((pool_id,group))
+                stop=False
+                for chain,items in by_chain.items():
+                    for offset in range(0,len(items),30):
+                        if (await qualification_pressure())["due_soon"]:stop=True;break
+                        batch=items[offset:offset+30]
+                        try:
+                            snaps=await self.provider.fetch_pools(chain,[p for p,_ in batch])
+                            now=datetime.now(timezone.utc)
+                            for pool_id,group in batch:
+                                snap=snaps.get(pool_id)
+                                if not snap:
+                                    for job in group:await defer_outcome_job(job["id"],minutes=15,error="pool_not_available")
+                                    continue
+                                for job in group:
+                                    base=job["payload_json"];baseline=base.get("observed_at");actual=None
+                                    if baseline:actual=(now-datetime.fromisoformat(str(baseline).replace("Z","+00:00"))).total_seconds()/60
+                                    payload={"requested_horizon_minutes":job["horizon_minutes"],"actual_elapsed_minutes":actual,"scheduled_due_at":job["due_at"],"baseline_event_id":job["baseline_event_id"],"observed_at":now,"observation":snap.model_dump(mode="json")}
+                                    await complete_outcome_job(job["id"],Event(event_type="OUTCOME",token_id=job["token_id"],payload=payload))
+                        except Exception as e:
+                            msg=str(e)[:300];print("OUTCOME_BATCH_RETRY",chain,type(e).__name__,msg,flush=True)
+                            for _,group in batch:
+                                for job in group:await defer_outcome_job(job["id"],minutes=1 if "429" in msg else 5,error=msg)
+                            if "429" in msg:stop=True;break
+                    if stop:break
+            except Exception as e:print("OUTCOME_WORKER_ERROR",type(e).__name__,str(e)[:300],flush=True)
             await asyncio.sleep(self.seconds)
     def start(self):
         if not self.task or self.task.done():self.task=asyncio.create_task(self.loop())
