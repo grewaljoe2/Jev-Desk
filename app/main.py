@@ -57,10 +57,9 @@ fast_entry_worker=FastEntryWorker(provider,seconds=5)
 async def startup():
     await init_db()
     scheduler.start()
-    qualification_worker.start()
-    fast_entry_worker.start()
-    active_trade_worker.start()
-    outcome_worker.start()
+    # Savip-exclusive shadow research: preserve historical data and existing
+    # positions, but stop legacy 15m/fast-entry/monitor/outcome API traffic.
+    # The shared discovery scheduler remains on for Savip candidate collection.
     savip_dex_worker.start()
     savip_chain_worker.start()
     savip_jev_validation_worker.start()
@@ -71,12 +70,12 @@ async def startup():
 
 @app.get("/health")
 async def health():
-    return {"ok":True,"version":settings.version,"shadow_only":True,"live_execution_enabled":False,"provider":provider.__class__.__name__,"provider_diagnostics":provider.last_diagnostics}
+    return {"ok":True,"version":settings.version,"shadow_only":True,"live_execution_enabled":False,"provider":provider.__class__.__name__,"provider_diagnostics":provider.last_diagnostics,"legacy_research":"PAUSED_SAVIP_PRIORITY"}
 
 @app.get("/status")
 async def status():
     r=await research_counts()
-    return {"mode":"SHADOW","scanner":"RUNNING","provider":provider.__class__.__name__,"live_execution_enabled":False,"cycle_seconds":scheduler.seconds,"snapshots_logged":r["snapshots"],"decisions_logged":r["decisions"],"outcomes_logged":r["outcomes"],"outcomes_pending":r["pending"],"storage":r["storage"]}
+    return {"mode":"SHADOW","scanner":"RUNNING","legacy_research":"PAUSED_SAVIP_PRIORITY","provider":provider.__class__.__name__,"live_execution_enabled":False,"legacy_research":"PAUSED_SAVIP_PRIORITY","cycle_seconds":scheduler.seconds,"snapshots_logged":r["snapshots"],"decisions_logged":r["decisions"],"outcomes_logged":r["outcomes"],"outcomes_pending":r["pending"],"storage":r["storage"]}
 
 @app.post("/run-once")
 async def run_once():
