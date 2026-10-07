@@ -6,13 +6,13 @@ from app.research.savip_shadow_execution import ticket_usd,simulated_market_fill
 from app.research.savip_risk import risk_decision
 
 class SavipShadowEntryWorker:
-    def __init__(self,seconds=60,bank_usd=1000.0):
-        self.seconds=seconds;self.bank_usd=bank_usd;self.task=None;self.state="waiting";self.last_error=None
+    def __init__(self,market_provider,seconds=60,bank_usd=1000.0):
+        self.market_provider=market_provider;self.seconds=seconds;self.bank_usd=bank_usd;self.task=None;self.state="waiting";self.last_error=None
     async def run_cycle(self):
         row=await latest_accepted_savip_pick()
         if not row or await savip_pick_already_opened(row["id"]):self.state="waiting";return
         p=row["payload_json"];evidence=(p.get("evidence") or {})
-        market=evidence.get("market") or {}
+        market=await self.market_provider.observe(row["token_id"]) or {}
         price=market.get("price_usd");liq=market.get("liquidity_usd")
         if not price or not liq:
             self.state="waiting_for_price";return
