@@ -14,6 +14,7 @@ from app.research.qualification_worker import QualificationWorker
 from app.research.savip_dex import SavipDexWorker
 from app.research.savip_trade_cut import exact_trade_cut
 from app.research.savip_chain_worker import SavipChainWorker
+from app.research.savip_jev_validation_worker import SavipJevValidationWorker
 from app.providers.typesafe_jev import TypeSafeJevProvider
 from app.research.savip_jev_candidate import latest_chain_pass
 from app.research.savip_jev_evidence import build_evidence
@@ -33,6 +34,7 @@ savip_dex_worker=SavipDexWorker(dex_provider)
 savip_dossier_provider=SavipDossierProvider()
 savip_chain_provider=SavipChainProvider()
 savip_chain_worker=SavipChainWorker(savip_dossier_provider,savip_chain_provider)
+savip_jev_validation_worker=SavipJevValidationWorker(typesafe_jev)
 typesafe_jev=TypeSafeJevProvider()
 scheduler=ShadowScheduler(provider,30)
 outcome_worker=OutcomeWorker(provider)
@@ -50,6 +52,7 @@ async def startup():
     outcome_worker.start()
     savip_dex_worker.start()
     savip_chain_worker.start()
+    savip_jev_validation_worker.start()
 
 @app.get("/health")
 async def health():
@@ -110,16 +113,7 @@ async def savip_jev_ready():
 
 @app.post("/savip-jev-validate-once")
 async def savip_jev_validate_once():
-    row=await latest_chain_pass()
-    if not row:return {"ok":False,"reason":"no_chain_pass_candidate","paid_call_made":False,"real_execution_enabled":False}
-    if not typesafe_jev.configured:return {"ok":False,"reason":"jev_not_configured","paid_call_made":False,"real_execution_enabled":False}
-    claimed=await claim_savip_jev(row["chain_event_id"],row["token_id"])
-    if not claimed:return {"ok":False,"reason":"chain_event_already_claimed","token_id":row["token_id"],"paid_call_made":False,"real_execution_enabled":False}
-    evidence=build_evidence(row["payload_json"])
-    result=await run_typed_jev(typesafe_jev,evidence,QUESTION_SETS,RULES)
-    await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
-    await complete_savip_jev_claim(row["chain_event_id"],"completed" if result.get("ok") else "failed")
-    return {"ok":result.get("ok",False),"token_id":row["token_id"],"result":result,"paid_call_made":True,"pick_enabled":False,"real_execution_enabled":False}
+    return {"ok":False,"reason":"paid_validation_not_public","internal_state":savip_jev_validation_worker.state,"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
