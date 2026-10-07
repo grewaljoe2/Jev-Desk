@@ -52,15 +52,14 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None,force=Fa
             if await cur.fetchone():return
         for h in (HORIZONS if horizons is None else tuple(horizons)):
             await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
-async def savip_candidate_pool(window_minutes=15,limit=50):
-    """Read-only continuous discovery candidate set for the savip comparison arm.
+async def savip_candidate_pool(window_minutes=15,limit=200):
+    """Continuous savip-style FREE CUT diagnostic from fresh discovery facts.
 
-    Unlike our 15m control, this pool starts from fresh DISCOVERY observations and
-    applies the same deterministic fact gate without a minimum-age requirement.
-    It does not PICK or trade; missing facts fail closed and are reported by the
-    diagnostic endpoint.
+    The desk cycle is 15m, but token age is evaluated as a gate rather than used
+    as the observation clock. Too-young tokens are WAIT/re-feed candidates.
+    No network calls, Jev calls, PICK, or positions happen here.
     """
-    if not settings.database_url:return []
+    if not settings.database_url:return {"scanned":0,"free_cut_survivors":[],"wait_too_young":[],"kills":{}}
     import psycopg
     from psycopg.rows import dict_row
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
@@ -79,14 +78,24 @@ async def savip_candidate_pool(window_minutes=15,limit=50):
           NULLIF(payload_json->>'liquidity_usd','')::double precision AS liquidity_usd,
           NULLIF(payload_json->>'volume_h24_usd','')::double precision AS volume_h24_usd,
           NULLIF(payload_json->>'mcap_usd','')::double precision AS mcap_usd,
-          NULLIF(payload_json->>'trades_h24','')::integer AS trades_h24,
-          NULLIF(payload_json->>'buys_h1','')::integer AS buys_h1,
-          NULLIF(payload_json->>'sells_h1','')::integer AS sells_h1,
-          NULLIF(payload_json->>'holders','')::integer AS holders,
-          NULLIF(payload_json->>'top_wallet_fraction','')::double precision AS top_wallet_fraction,
-          NULLIF(payload_json->>'top10_fraction','')::double precision AS top10_fraction
+          NULLIF(payload_json->>'trades_h24','')::integer AS trades_h24
         FROM fresh ORDER BY discovered_at DESC LIMIT %s""",(window_minutes,limit))
-        return await cur.fetchall()
+        rows=await cur.fetchall()
+    survivors=[];wait=[];kills={}
+    for r in rows:
+        x=dict(r);age=x.get("age_minutes");liq=x.get("liquidity_usd");vol=x.get("volume_h24_usd");mc=x.get("mcap_usd")
+        reason=None
+        if any(v is None for v in (age,liq,vol,mc)):reason="missing_free_fact"
+        elif age<15:reason="wait_too_young"
+        elif age>72*60:reason="too_old"
+        elif liq<12000:reason="liquidity"
+        elif vol<40000:reason="volume"
+        elif mc<60000:reason="mcap_low"
+        elif mc>8000000:reason="mcap_high"
+        if reason=="wait_too_young":wait.append(x)
+        elif reason:kills[reason]=kills.get(reason,0)+1
+        else:survivors.append(x)
+    return {"scanned":len(rows),"free_cut_survivors":survivors,"wait_too_young":wait,"kills":kills}
 
 async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
     """Open one research-only position from a contemporaneous qualified snapshot. No broker/wallet action."""
