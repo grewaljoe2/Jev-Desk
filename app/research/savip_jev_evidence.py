@@ -1,6 +1,8 @@
 """Evidence packets for Savip typed Jev judgments. Shadow only."""
 from pydantic import BaseModel
 from typing import Any
+from app.providers.savip_social import exact_x_observation
+from app.providers.savip_social import exact_x_observation
 
 class MarketEvidence(BaseModel):
     price_usd:float|None=None;liquidity_usd:float|None=None;volume_h24_usd:float|None=None
@@ -24,7 +26,7 @@ class JevEvidence(BaseModel):
 def build_evidence(d:dict,x_observation:dict|None=None)->JevEvidence:
     # SOCIAL may only use the exact handle supplied by the chain dossier.
     handle=d.get("x_handle")
-    xo=x_observation if handle and x_observation and x_observation.get("x_handle")==handle else None
+    xo=exact_x_observation(handle,x_observation)
     return JevEvidence(
       token_id=d["token_id"],ticker=d.get("ticker"),
       market=MarketEvidence(**{k:d.get(k) for k in MarketEvidence.model_fields}),
