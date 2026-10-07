@@ -123,16 +123,21 @@ async def savip_candidate_pool(window_minutes=15,limit=200):
     survivors=[];wait=[];kills={};missing={};trade_survivors=[];trade_kills={};trade_missing={}
     for r in rows:
         x=dict(r);age=x.get("age_minutes");liq=x.get("liquidity_usd");vol=x.get("volume_h24_usd");mc=x.get("mcap_usd")
-        absent=[k for k,v in (("age_minutes",age),("liquidity_usd",liq),("volume_h24_usd",vol),("mcap_usd",mc)) if v is None]
         reason=None
-        if absent:
-            reason="missing_free_fact"
-            for k in absent:missing[k]=missing.get(k,0)+1
-            x["missing_free_fields"]=absent
+        # Published FREE CUT order: age -> liquidity -> 24h volume -> market cap.
+        # Missing facts fail closed only when their gate is actually reached.
+        if age is None:
+            reason="missing_free_fact";missing["age_minutes"]=missing.get("age_minutes",0)+1;x["missing_free_fields"]=["age_minutes"]
         elif age<HARD["min_age_minutes"]:reason="wait_too_young"
         elif age>HARD["max_age_hours"]*60:reason="too_old"
+        elif liq is None:
+            reason="missing_free_fact";missing["liquidity_usd"]=missing.get("liquidity_usd",0)+1;x["missing_free_fields"]=["liquidity_usd"]
         elif liq<HARD["min_liquidity_usd"]:reason="liquidity"
+        elif vol is None:
+            reason="missing_free_fact";missing["volume_h24_usd"]=missing.get("volume_h24_usd",0)+1;x["missing_free_fields"]=["volume_h24_usd"]
         elif vol<HARD["min_volume_h24"]:reason="volume"
+        elif mc is None:
+            reason="missing_free_fact";missing["mcap_usd"]=missing.get("mcap_usd",0)+1;x["missing_free_fields"]=["mcap_usd"]
         elif mc<HARD["min_mcap_usd"]:reason="mcap_low"
         elif mc>HARD["max_mcap_usd"]:reason="mcap_high"
         if reason=="wait_too_young":wait.append(x)
