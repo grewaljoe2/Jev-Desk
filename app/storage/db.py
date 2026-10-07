@@ -56,6 +56,15 @@ async def due_outcome_jobs(limit=12):
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("SELECT j.id,j.token_id,j.horizon_minutes,j.due_at,e.payload_json FROM outcome_jobs j JOIN LATERAL (SELECT payload_json FROM events WHERE token_id=j.token_id AND event_type='SNAPSHOT' ORDER BY id ASC LIMIT 1) e ON true WHERE j.status='pending' AND j.due_at<=NOW() AND COALESCE(j.next_attempt_at,j.due_at)<=NOW() ORDER BY j.due_at LIMIT %s",(limit,))
         return await cur.fetchall()
+async def due_outcome_group(limit=4):
+    jobs=await due_outcome_jobs(limit*10)
+    groups={}
+    for job in jobs:
+        base=job["payload_json"];pool_id=(base.get("raw") or {}).get("pool_id");key=(base.get("chain"),pool_id)
+        if not pool_id:continue
+        groups.setdefault(key,[]).append(job)
+        if len(groups)>=limit:break
+    return list(groups.values())
 async def complete_outcome_job(job_id,event):
     if not settings.database_url:return
     import psycopg
