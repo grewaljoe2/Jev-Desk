@@ -8,7 +8,7 @@ async def open_book_position(token_id:str,ticket_usd:float,entry_price:float,fil
         cur=await db.execute("""INSERT INTO virtual_positions(token_id,arm,status,requested_size_usd,filled_size_usd,entry_price,opened_at,provenance)
           VALUES(%s,'savip_reference','open',%s,%s,%s,NOW(),%s)
           ON CONFLICT (token_id,arm) WHERE status='open' DO NOTHING RETURNING id""",
-          (token_id,ticket_usd,fill.get("net_asset_usd",0.0),entry_price,provenance)
+          (token_id,ticket_usd,fill.get("net_asset_usd",0.0),entry_price,provenance))
         row=await cur.fetchone();await db.commit();return row[0] if row else None
 
 async def close_book_position(position_id:int,exit_price:float):
