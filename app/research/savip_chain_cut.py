@@ -2,6 +2,13 @@
 from app.strategy.reference_thresholds import HARD
 
 def evaluate_chain(d):
+    # Unknown required safety evidence is not a verified safety pass.
+    required=("top_wallet_percent","top_10_percent","holder_count")
+    missing=[k for k in required if d.get(k) is None]
+    if d.get("chain")=="bsc" and d.get("is_honeypot") is None:missing.append("is_honeypot")
+    if d.get("chain")=="solana":
+        missing.extend(k for k in ("mint_authority","freeze_authority") if d.get(k) is None)
+    if missing:return False,"missing_chain_evidence:"+",".join(missing)
     tw=d.get("top_wallet_percent")
     if tw is not None and float(tw)>HARD["max_top_wallet"]:return False,"top_wallet"
     t10=d.get("top_10_percent")
