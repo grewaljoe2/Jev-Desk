@@ -1,11 +1,11 @@
 """Savip dossier facts matching the published collector. Shadow research only."""
 import asyncio
-import httpx
+import httpx\nimport time
 
 class SavipDossierProvider:
     GT="https://api.geckoterminal.com/api/v2"
     NET={"solana":"solana","bsc":"bsc","base":"base","eth":"eth"}
-    def __init__(self):self.client=httpx.AsyncClient(timeout=20,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.3"})
+    def __init__(self):\n        self.client=httpx.AsyncClient(timeout=20,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.3"})\n        self._lock=asyncio.Lock();self._next_gt_at=0.0
     async def fetch(self,chain,address):
         net=self.NET.get(chain)
         if not net:return None
