@@ -12,7 +12,8 @@ class SavipPickWorker:
             self.state="position_held";return
         rows=await recent_savip_soft_survivors()
         fp=[r["id"] for r in rows]
-        if fp and await savip_pick_fingerprint_seen(fp):\n            self.state="already_picked";return
+        if fp and await savip_pick_fingerprint_seen(fp):
+            self.state="already_picked";return
         if not rows:self.state="no_survivors";return
         if len(rows)==1:
             p=single_survivor(rows[0]["token_id"]);p["accepted"]=True;p["token_id"]=rows[0]["token_id"];p["evidence"]=rows[0]["payload_json"].get("evidence");p["jev_fingerprint"]=",".join(str(x) for x in sorted(fp))
