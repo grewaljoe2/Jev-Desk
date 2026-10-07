@@ -39,8 +39,8 @@ async def events(limit:int=50):return await recent_events(min(max(limit,1),500))
 
 @app.get("/research-health")
 async def research_health():
-    r=await research_counts();due=await due_outcome_jobs(5)
-    return {"ok":True,"storage":r["storage"],"snapshots":r["snapshots"],"decisions":r["decisions"],"outcomes":r["outcomes"],"pending":r["pending"],"due_now":len(due),"live_execution_enabled":False}
+    r=await research_counts()
+    return {"ok":True,"storage":r["storage"],"snapshots":r["snapshots"],"decisions":r["decisions"],"outcomes":r["outcomes"],"pending":r["pending"],"due_now":r.get("due_now",0),"live_execution_enabled":False}
 
 @app.get("/",response_class=HTMLResponse)
 async def dashboard():return HTMLResponse(DASHBOARD)
