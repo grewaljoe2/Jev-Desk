@@ -16,6 +16,7 @@ from app.research.savip_trade_cut import exact_trade_cut
 from app.research.savip_chain_worker import SavipChainWorker
 from app.research.savip_jev_validation_worker import SavipJevValidationWorker
 from app.research.savip_jev_worker import SavipJevWorker
+from app.research.savip_pick_worker import SavipPickWorker
 from app.providers.typesafe_jev import TypeSafeJevProvider
 from app.research.savip_jev_candidate import latest_chain_pass
 from app.research.savip_jev_evidence import build_evidence
@@ -38,6 +39,7 @@ savip_chain_worker=SavipChainWorker(savip_dossier_provider,savip_chain_provider)
 typesafe_jev=TypeSafeJevProvider()
 savip_jev_validation_worker=SavipJevValidationWorker(typesafe_jev)
 savip_jev_worker=SavipJevWorker(typesafe_jev)
+savip_pick_worker=SavipPickWorker(typesafe_jev)
 scheduler=ShadowScheduler(provider,30)
 outcome_worker=OutcomeWorker(provider)
 qualification_worker=QualificationWorker(provider)
@@ -56,6 +58,7 @@ async def startup():
     savip_chain_worker.start()
     savip_jev_validation_worker.start()
     savip_jev_worker.start()
+    savip_pick_worker.start()
 
 @app.get("/health")
 async def health():
