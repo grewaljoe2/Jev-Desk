@@ -686,6 +686,20 @@ async def open_savip_positions():
         cur=await db.execute("SELECT * FROM virtual_positions WHERE arm='savip_reference' AND status='open' ORDER BY opened_at")
         return [dict(r) for r in await cur.fetchall()]
 
+async def savip_positions_detail(limit:int=25):
+    """Read-only Savip BOOK positions for the mobile shadow dashboard."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT id,token_id,status,requested_size_usd,filled_size_usd,entry_price,opened_at,closed_at,exit_price,
+          CASE WHEN entry_price>0 AND COALESCE(exit_price,last_price) IS NOT NULL
+            THEN filled_size_usd*(COALESCE(exit_price,last_price)/entry_price-1) ELSE 0 END AS pnl_usd,
+          last_price,last_marked_at,provenance
+          FROM virtual_positions WHERE arm='savip_reference'
+          ORDER BY opened_at DESC NULLS LAST,id DESC LIMIT %s""",(limit,))
+        return [dict(r) for r in await cur.fetchall()]
+
 async def log_savip_lifecycle(event_type:str,token_id:str,payload:dict):
     if not settings.database_url:return
     import psycopg
