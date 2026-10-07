@@ -53,49 +53,62 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None,force=Fa
         for h in (HORIZONS if horizons is None else tuple(horizons)):
             await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
 async def savip_candidate_pool(window_minutes=15,limit=200):
-    """Continuous savip-style FREE CUT diagnostic from fresh discovery facts.
+    """Savip FREE CUT from fresh candidates using the freshest already-collected facts.
 
-    The desk cycle is 15m, but token age is evaluated as a gate rather than used
-    as the observation clock. Too-young tokens are WAIT/re-feed candidates.
-    No network calls, Jev calls, PICK, or positions happen here.
+    Candidate membership still comes only from recent DISCOVERY. For each candidate,
+    reuse its newest DISCOVERY or >=15m qualification SNAPSHOT so Savip does not
+    discard a later provider refresh. This adds no network calls and changes no gate.
     """
-    if not settings.database_url:return {"scanned":0,"free_cut_survivors":[],"wait_too_young":[],"kills":{}}
+    if not settings.database_url:return {"scanned":0,"free_cut_survivors":[],"wait_too_young":[],"kills":{},"missing_fields":{}}
     import psycopg
     from psycopg.rows import dict_row
+    from app.strategy.reference_thresholds import HARD
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
-        cur=await db.execute("""WITH fresh AS (
+        cur=await db.execute("""WITH candidates AS (
           SELECT DISTINCT ON (e.token_id)
-            e.id AS discovery_event_id,e.token_id,e.created_at AS discovered_at,e.payload_json
+            e.id AS discovery_event_id,e.token_id,e.created_at AS discovered_at
           FROM events e
           WHERE e.event_type='DISCOVERY'
             AND e.created_at>=NOW()-(%s * interval '1 minute')
           ORDER BY e.token_id,e.created_at DESC
         )
-        SELECT discovery_event_id,token_id,discovered_at,
-          payload_json->>'chain' AS chain,
-          NULLIF(payload_json->>'age_minutes','')::double precision AS age_minutes,
-          NULLIF(payload_json->>'price_usd','')::double precision AS price_usd,
-          NULLIF(payload_json->>'liquidity_usd','')::double precision AS liquidity_usd,
-          NULLIF(payload_json->>'volume_h24_usd','')::double precision AS volume_h24_usd,
-          NULLIF(payload_json->>'mcap_usd','')::double precision AS mcap_usd,
-          NULLIF(payload_json->>'trades_h24','')::integer AS trades_h24
-        FROM fresh ORDER BY discovered_at DESC LIMIT %s""",(window_minutes,limit))
+        SELECT c.discovery_event_id,c.token_id,c.discovered_at,
+          o.payload_json->>'chain' AS chain,
+          NULLIF(o.payload_json->>'age_minutes','')::double precision AS age_minutes,
+          NULLIF(o.payload_json->>'price_usd','')::double precision AS price_usd,
+          NULLIF(o.payload_json->>'liquidity_usd','')::double precision AS liquidity_usd,
+          NULLIF(o.payload_json->>'volume_h24_usd','')::double precision AS volume_h24_usd,
+          NULLIF(o.payload_json->>'mcap_usd','')::double precision AS mcap_usd,
+          NULLIF(o.payload_json->>'trades_h24','')::integer AS trades_h24,
+          o.event_type AS fact_source,o.created_at AS facts_at
+        FROM candidates c
+        JOIN LATERAL (
+          SELECT e2.event_type,e2.created_at,e2.payload_json
+          FROM events e2
+          WHERE e2.token_id=c.token_id AND e2.event_type IN ('DISCOVERY','SNAPSHOT')
+          ORDER BY e2.created_at DESC LIMIT 1
+        ) o ON TRUE
+        ORDER BY c.discovered_at DESC LIMIT %s""",(window_minutes,limit))
         rows=await cur.fetchall()
-    survivors=[];wait=[];kills={}
+    survivors=[];wait=[];kills={};missing={}
     for r in rows:
         x=dict(r);age=x.get("age_minutes");liq=x.get("liquidity_usd");vol=x.get("volume_h24_usd");mc=x.get("mcap_usd")
+        absent=[k for k,v in (("age_minutes",age),("liquidity_usd",liq),("volume_h24_usd",vol),("mcap_usd",mc)) if v is None]
         reason=None
-        if any(v is None for v in (age,liq,vol,mc)):reason="missing_free_fact"
-        elif age<15:reason="wait_too_young"
-        elif age>72*60:reason="too_old"
-        elif liq<12000:reason="liquidity"
-        elif vol<40000:reason="volume"
-        elif mc<60000:reason="mcap_low"
-        elif mc>8000000:reason="mcap_high"
+        if absent:
+            reason="missing_free_fact"
+            for k in absent:missing[k]=missing.get(k,0)+1
+            x["missing_free_fields"]=absent
+        elif age<HARD["min_age_minutes"]:reason="wait_too_young"
+        elif age>HARD["max_age_hours"]*60:reason="too_old"
+        elif liq<HARD["min_liquidity_usd"]:reason="liquidity"
+        elif vol<HARD["min_volume_h24"]:reason="volume"
+        elif mc<HARD["min_mcap_usd"]:reason="mcap_low"
+        elif mc>HARD["max_mcap_usd"]:reason="mcap_high"
         if reason=="wait_too_young":wait.append(x)
         elif reason:kills[reason]=kills.get(reason,0)+1
         else:survivors.append(x)
-    return {"scanned":len(rows),"free_cut_survivors":survivors,"wait_too_young":wait,"kills":kills}
+    return {"scanned":len(rows),"free_cut_survivors":survivors,"wait_too_young":wait,"kills":kills,"missing_fields":missing}
 
 async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
     """Open one research-only position from a contemporaneous qualified snapshot. No broker/wallet action."""
