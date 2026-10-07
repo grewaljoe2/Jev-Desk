@@ -41,3 +41,13 @@ async def load_clean_replay_samples(limit=500):
         if outcomes:
             samples.append(sample_from_events(row["snapshot_payload"],outcomes))
     return samples
+
+async def load_qualification_replay_samples(limit=500):
+    """Strategy-entry evidence only: immutable snapshots created by >=15m qualification jobs."""
+    from app.storage.db import qualification_replay_rows
+    rows=await qualification_replay_rows(limit)
+    samples=[]
+    for row in rows:
+        # Qualification itself is scoreable before future outcome points mature.
+        samples.append(sample_from_events(row["snapshot_payload"],row.get("outcomes") or []))
+    return samples
