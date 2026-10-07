@@ -143,6 +143,28 @@ async def shadow_exit_summary():
             r["profit_factor"]=(gp/gl) if gl>0 else (None if gp==0 else "inf")
         return rows
 
+async def fast_entry_discovery_funnel():
+    """Count first-seen discovery eligibility for each Fast horizon without changing scheduling."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""WITH first_seen AS (
+          SELECT DISTINCT ON (token_id) token_id,
+            NULLIF(payload_json->>'age_minutes','')::double precision AS age_minutes
+          FROM events
+          WHERE event_type='DISCOVERY'
+          ORDER BY token_id,created_at ASC
+        ), horizons(cohort_minutes) AS (VALUES (1),(3),(5),(10))
+        SELECT h.cohort_minutes,
+          count(*) FILTER(WHERE f.age_minutes IS NOT NULL) AS discovered_with_age,
+          count(*) FILTER(WHERE f.age_minutes IS NOT NULL AND f.age_minutes<=h.cohort_minutes) AS eligible_at_first_seen,
+          count(*) FILTER(WHERE f.age_minutes IS NOT NULL AND f.age_minutes>h.cohort_minutes) AS already_too_old,
+          count(*) FILTER(WHERE f.age_minutes IS NULL) AS missing_age
+        FROM horizons h CROSS JOIN first_seen f
+        GROUP BY h.cohort_minutes ORDER BY h.cohort_minutes""")
+        return await cur.fetchall()
+
 async def fast_entry_diagnostics():
     """Explain whether fast cohorts are empty because of filters, lateness, or backlog."""
     if not settings.database_url:return {"decisions":[],"jobs":[]}
