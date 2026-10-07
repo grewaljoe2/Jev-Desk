@@ -13,8 +13,8 @@ class SavipDexWorker:
                 facts=await self.provider.fetch_pair(row["chain"],row["pool_id"])
                 if facts:
                     await log_savip_dex(row["token_id"],row["payload_json"],facts);self.last_enriched+=1
-                    if self.on_enriched:await self.on_enriched()
             except Exception as e:self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+        if self.on_enriched:await self.on_enriched()
     async def loop(self):
         while True:
             try:await self.run_cycle()

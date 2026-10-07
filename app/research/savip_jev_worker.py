@@ -7,8 +7,8 @@ from app.research.savip_jev_questions import QUESTION_SETS,RULES
 from app.storage.db import claim_savip_jev,complete_savip_jev_claim,log_savip_jev,open_savip_positions
 
 class SavipJevWorker:
-    def __init__(self,provider,seconds=900,cap=3):
-        self.provider=provider;self.seconds=seconds;self.cap=cap;self.task=None
+    def __init__(self,provider,seconds=900,cap=3,on_pass=None):
+        self.provider=provider;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.task=None
         self.last_checked=0;self.last_passed=0;self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_passed=0;self.last_error=None
@@ -22,7 +22,9 @@ class SavipJevWorker:
             await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
             status="completed" if result.get("ok") else "failed"
             await complete_savip_jev_claim(row["chain_event_id"],status)
-            if result.get("ok") and result.get("soft_pass"):self.last_passed+=1
+            if result.get("ok") and result.get("soft_pass"):
+                self.last_passed+=1
+                if self.on_pass:await self.on_pass()
             elif not result.get("ok"):self.last_error=result.get("reason","jev_provider_error")
     async def loop(self):
         while True:
