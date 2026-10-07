@@ -79,7 +79,7 @@ async def fast_entry_data():
 @app.get("/savip-shadow-data")
 async def savip_shadow_data():
     candidates=await savip_candidate_pool()
-    return {"ok":True,"mode":"candidate_observation_only","candidate_count":len(candidates),"candidates":candidates,"pick_enabled":False,"real_execution_enabled":False}
+    return {"ok":True,"mode":"continuous_discovery_observation_only","candidate_source":"fresh_discovery_not_15m_control","candidate_count":len(candidates),"candidates":candidates,"pick_enabled":False,"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
