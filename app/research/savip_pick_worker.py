@@ -4,7 +4,7 @@ from app.storage.db import recent_savip_soft_survivors,log_savip_pick,open_savip
 from app.research.savip_pick import PickResult
 
 class SavipPickWorker:
-    def __init__(self,provider,seconds=900):
+    def __init__(self,provider,seconds=60):
         self.provider=provider;self.seconds=seconds;self.task=None
         self.state="waiting";self.last_error=None
     async def run_cycle(self):
