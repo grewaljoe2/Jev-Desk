@@ -661,3 +661,33 @@ async def log_savip_pick(payload:dict):
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_PICK',%s,'savip_reference',%s::jsonb)",(payload.get("token_id"),json.dumps(payload,default=str)));await db.commit()
+
+async def latest_accepted_savip_pick():
+    if not settings.database_url:return None
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT id,token_id,payload_json,created_at FROM events WHERE event_type='SAVIP_PICK'
+          AND payload_json->>'accepted'='true' ORDER BY created_at DESC LIMIT 1""")
+        r=await cur.fetchone();return dict(r) if r else None
+
+async def savip_pick_already_opened(pick_event_id:int):
+    if not settings.database_url:return False
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT 1 FROM events WHERE event_type='SAVIP_SHADOW_ENTRY' AND payload_json->>'pick_event_id'=%s LIMIT 1",(str(pick_event_id),))
+        return bool(await cur.fetchone())
+
+async def open_savip_positions():
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("SELECT * FROM virtual_positions WHERE arm='savip_reference' AND status='open' ORDER BY opened_at")
+        return [dict(r) for r in await cur.fetchall()]
+
+async def log_savip_lifecycle(event_type:str,token_id:str,payload:dict):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES(%s,%s,'savip_reference',%s::jsonb)",(event_type,token_id,json.dumps(payload,default=str)));await db.commit()
