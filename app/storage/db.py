@@ -112,7 +112,9 @@ async def shadow_position_summary():
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         cur=await db.execute("SELECT count(*) FILTER(WHERE status='open'),count(*) FILTER(WHERE status='closed'),COALESCE(sum(CASE WHEN status='closed' AND entry_price>0 AND exit_price IS NOT NULL THEN filled_size_usd*(exit_price/entry_price-1) ELSE 0 END),0),COALESCE(sum(CASE WHEN status='open' AND entry_price>0 AND last_price IS NOT NULL THEN filled_size_usd*(last_price/entry_price-1) ELSE 0 END),0) FROM virtual_positions WHERE arm='reference'")
-        r=await cur.fetchone();return {"open":r[0],"closed":r[1],"realized_pnl_usd":float(r[2] or 0),"unrealized_pnl_usd":float(r[3] or 0)}
+        r=await cur.fetchone()
+        cur=await db.execute("SELECT count(*) FILTER(WHERE status='open' AND provenance='forward_qualification_v1'),COALESCE(sum(CASE WHEN provenance='forward_qualification_v1' AND status='open' AND entry_price>0 AND last_price IS NOT NULL THEN filled_size_usd*(last_price/entry_price-1) WHEN provenance='forward_qualification_v1' AND status='closed' AND entry_price>0 AND exit_price IS NOT NULL THEN filled_size_usd*(exit_price/entry_price-1) ELSE 0 END),0),count(*) FILTER(WHERE status='open' AND provenance<>'forward_qualification_v1'),COALESCE(sum(CASE WHEN provenance<>'forward_qualification_v1' AND status='open' AND entry_price>0 AND last_price IS NOT NULL THEN filled_size_usd*(last_price/entry_price-1) WHEN provenance<>'forward_qualification_v1' AND status='closed' AND entry_price>0 AND exit_price IS NOT NULL THEN filled_size_usd*(exit_price/entry_price-1) ELSE 0 END),0) FROM virtual_positions WHERE arm='reference'")
+        x=await cur.fetchone();return {"open":r[0],"closed":r[1],"realized_pnl_usd":float(r[2] or 0),"unrealized_pnl_usd":float(r[3] or 0),"forward_open":x[0],"forward_pnl_usd":float(x[1] or 0),"legacy_open":x[2],"legacy_pnl_usd":float(x[3] or 0)}
 
 async def research_counts():
     if not settings.database_url:return {"storage":"sqlite","snapshots":0,"decisions":0,"outcomes":0,"pending":0}
