@@ -12,10 +12,16 @@ class SavipDossierProvider:
     async def fetch(self,chain,address):
         net=self.NET.get(chain)
         if not net:return None
-        r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info")
-        if r.status_code==429:
-            await asyncio.sleep(7)
+        async with self._lock:
+            wait=max(0.0,self._next_gt_at-time.monotonic())
+            if wait:
+                await asyncio.sleep(wait)
             r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info")
+            self._next_gt_at=time.monotonic()+6.2
+            if r.status_code==429:
+                await asyncio.sleep(12)
+                r=await self.client.get(f"{self.GT}/networks/{net}/tokens/{address}/info")
+                self._next_gt_at=time.monotonic()+6.2
         r.raise_for_status()
         a=((r.json().get("data") or {}).get("attributes") or {})
         holders=a.get("holders") or {};dist=holders.get("distribution_percentage") or {}
