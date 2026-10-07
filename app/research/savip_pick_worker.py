@@ -19,7 +19,9 @@ class SavipPickWorker:
             raw=await self.provider.pick(candidates)
             parsed=PickResult.model_validate(raw["pick"])
             accepted,reason=parsed.accepted()
-            winner_id=parsed.winner.token_id if parsed.winner else None\n            winner_row=next((r for r in rows if r["token_id"]==winner_id),None)\n            payload={"token_id":winner_id,"accepted":accepted,"reason":reason,"pick":parsed.model_dump(mode="json"),"model":raw.get("model"),"usage":raw.get("usage"),"candidate_count":len(rows),"evidence":winner_row["payload_json"].get("evidence") if winner_row else None}
+            winner_id=parsed.winner.token_id if parsed.winner else None
+            winner_row=next((r for r in rows if r["token_id"]==winner_id),None)
+            payload={"token_id":winner_id,"accepted":accepted,"reason":reason,"pick":parsed.model_dump(mode="json"),"model":raw.get("model"),"usage":raw.get("usage"),"candidate_count":len(rows),"evidence":winner_row["payload_json"].get("evidence") if winner_row else None}
             await log_savip_pick(payload);self.state="accepted" if accepted else "no_trade"
         except Exception as e:
             self.state="failed";self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
