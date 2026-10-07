@@ -8,15 +8,21 @@ class ActiveTradeWorker:
     Uses batched pool reads and actual observed prices. It never invents a stop/TP fill.
     Qualification jobs retain first priority; active positions outrank background outcomes.
     """
-    def __init__(self,provider,seconds=15):
-        self.provider=provider;self.seconds=seconds;self.task=None
+    def __init__(self,provider,seconds=15,max_defer_seconds=30):
+        self.provider=provider;self.seconds=seconds;self.max_defer_seconds=max_defer_seconds;self.task=None
         self.last_cycle_at=None;self.last_targets=0;self.last_marked=0;self.last_error=None
+        self._deferred_since=None
     async def loop(self):
         while True:
             try:
                 pressure=await qualification_pressure()
+                now=datetime.now(timezone.utc)
                 if pressure["due"]:
-                    await asyncio.sleep(3);continue
+                    if self._deferred_since is None:self._deferred_since=now
+                    deferred=(now-self._deferred_since).total_seconds()
+                    if deferred<self.max_defer_seconds:
+                        await asyncio.sleep(3);continue
+                self._deferred_since=None
                 targets=await active_shadow_targets()
                 self.last_targets=len(targets);marked=0
                 by_chain={}
