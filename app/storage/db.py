@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY,created_at TIMESTAMPT
 CREATE INDEX IF NOT EXISTS idx_events_token ON events(token_id);
 CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(event_type,created_at);
 CREATE TABLE IF NOT EXISTS virtual_positions(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,arm TEXT NOT NULL,status TEXT NOT NULL,requested_size_usd DOUBLE PRECISION NOT NULL,filled_size_usd DOUBLE PRECISION NOT NULL DEFAULT 0,entry_price DOUBLE PRECISION,opened_at TIMESTAMPTZ,closed_at TIMESTAMPTZ,exit_price DOUBLE PRECISION,UNIQUE(token_id,arm,status));
+ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS baseline_event_id BIGINT;
+ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_price DOUBLE PRECISION;
+ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_marked_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS outcome_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,horizon_minutes INTEGER NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',UNIQUE(token_id,horizon_minutes));
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
@@ -59,12 +62,19 @@ async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):
             await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(%s,'SHADOW_ENTRY',%s,'reference',%s::jsonb)",(snapshot.observed_at,snapshot.token_id,payload))
             return position_id
 
+async def mark_shadow_positions(token_id,price,observed_at,baseline_event_id=None):
+    """Mark open research positions from an already-collected provider observation; never makes an extra market-data call."""
+    if not settings.database_url or price is None or price<=0:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("UPDATE virtual_positions SET last_price=%s,last_marked_at=%s WHERE token_id=%s AND arm='reference' AND status='open'",(price,observed_at,token_id))
+
 async def shadow_position_summary():
     if not settings.database_url:return {"open":0,"closed":0,"realized_pnl_usd":0.0}
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        cur=await db.execute("SELECT count(*) FILTER(WHERE status='open'),count(*) FILTER(WHERE status='closed'),COALESCE(sum(CASE WHEN status='closed' AND entry_price>0 AND exit_price IS NOT NULL THEN filled_size_usd*(exit_price/entry_price-1) ELSE 0 END),0) FROM virtual_positions WHERE arm='reference'")
-        r=await cur.fetchone();return {"open":r[0],"closed":r[1],"realized_pnl_usd":float(r[2] or 0)}
+        cur=await db.execute("SELECT count(*) FILTER(WHERE status='open'),count(*) FILTER(WHERE status='closed'),COALESCE(sum(CASE WHEN status='closed' AND entry_price>0 AND exit_price IS NOT NULL THEN filled_size_usd*(exit_price/entry_price-1) ELSE 0 END),0),COALESCE(sum(CASE WHEN status='open' AND entry_price>0 AND last_price IS NOT NULL THEN filled_size_usd*(last_price/entry_price-1) ELSE 0 END),0) FROM virtual_positions WHERE arm='reference'")
+        r=await cur.fetchone();return {"open":r[0],"closed":r[1],"realized_pnl_usd":float(r[2] or 0),"unrealized_pnl_usd":float(r[3] or 0)}
 
 async def research_counts():
     if not settings.database_url:return {"storage":"sqlite","snapshots":0,"decisions":0,"outcomes":0,"pending":0}
