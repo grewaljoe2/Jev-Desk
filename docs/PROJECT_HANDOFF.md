@@ -129,3 +129,40 @@ This section supersedes earlier live-state bullets where they conflict.
 5. Add exact decision provenance (baseline_event_id/qualification_job_id) rather than token-only qualified-priority joins.
 6. Harden qualification idempotency/transactionality and scheduler exception survival.
 7. Historical backtesting remains desired but not yet implemented; keep it strictly separate from untouched forward evidence and never use current fields as historical point-in-time facts.
+
+
+## 2026-10-07 verified update — evidence accounting, author comparison, active monitoring
+This section supersedes the stale deployment-failure state above where it conflicts.
+
+### Current verified production
+- PR #50 repaired the #48 dashboard corruption and deployed successfully.
+- PR #51 removed the 500-sample qualification aggregate cap and improved 429 Retry-After handling.
+- PR #52 added explicit forward-vs-legacy shadow provenance and the real Trades ledger. Existing pre-forward rows remain `legacy_pre_forward`; new valid entries are `forward_qualification_v1`.
+- PR #53 changed Home to forward-only counts/P&L but hit the recurring giant-DASHBOARD corruption. PR #54 structurally repaired it.
+- PR #55, merge commit `2e1a49e05233ce2bc2521261e46c67fb0ef0fc85`, makes exit evidence interpretable: per-policy closed/open counts, wins/losses, realized and unrealized P&L, average closed return, gross profit/loss, win rate and profit factor. Trades renders each exit arm's state/return/reason. The primary never-sell position is explicitly a Hold benchmark, not strategy P&L. Home headline is TP/SL realized P&L.
+- PR #56, merge commit `ead05c485492fbcfb41679279a87014fb5e9b6a8`, adds a dedicated ActiveTradeWorker. Render deploy `dep-db32g17avr4c739ie690` is VERIFIED LIVE (finished 2026-10-07 11:08:37Z).
+- ActiveTradeWorker targets a 15-second loop, batches up to 30 same-chain pools, uses only actual provider-observed prices, and never fabricates threshold fills. Qualification due jobs retain first priority. While forward positions are open, background OutcomeWorker traffic yields so scarce provider capacity is used for active marks. Actual observation frequency is still constrained by GeckoTerminal shared pacing/rate limits.
+- Real execution remains OFF.
+
+### First untouched forward trades / why accounting changed
+- Legacy Solana position is excluded from forward validation and has no retroactive exit arms.
+- First two `forward_qualification_v1` $100 entries demonstrated that Hold benchmark P&L is not a valid headline for exit-strategy performance.
+- One forward trade was observed around +26.08% before later collapsing near zero. Its `tp20_sl10_v1` arm closed at the actual observed profitable price; the later primary hold collapse must not overwrite that realized exit evidence.
+- The other forward trade crossed the nominal -10% stop between observations and the first observed exit price was near zero. The system correctly records the observed executable proxy rather than inventing a -10% fill. This is important evidence about microcap gap/rug risk and motivates faster active monitoring.
+- Do not choose an exit-policy winner from two trades. Preserve untouched forward evidence and grow the sample.
+
+### Newly verified author/reference-strategy distinction
+- Jarrod Watts' public `jev-trader` architecture is NOT a 15-minute new-token buy-and-hold strategy. It is a very high-frequency Kuru MON/USDC order-book/liquidity-provision experiment: decisions/requotes are approximately per ~300 ms block, with a model question on roughly a 100-block/~30-second horizon. It repeatedly posts/replaces post-only orders, seeks spread capture, and manages inventory rather than making one $100 all-in trade and waiting.
+- The public project uses a $100-style bankroll/configuration, but do NOT state that large real-money profit from $100 is verified. Public materials support dry-run/simulated fills and a mock/default model unless Jev is configured; headline/demo performance is not equivalent to audited live-money performance.
+- Jev Desk's >=15m minimum qualification was OUR microcap research design, not inherited from the author. This explains a major architectural divergence from the user's original intent of frequent opportunities and rapid bankroll recycling.
+- Preserve the existing >=15m strategy as a clean control. Next research branch should add a separately versioned sub-15m/high-frequency entry experiment (candidate ages such as ~1m/3m/5m/10m versus 15m control) rather than silently changing historical evidence. Compare executable expectancy, rug/tail loss, MFE/MAE, realized exit-policy P&L, trade frequency and bankroll recycling.
+- Younger entries must be paired with fast active-position monitoring. Do not loosen age/filter rules merely to create more trades, and do not contaminate the existing 15m cohort.
+- Important conceptual point: matching the author's frequency principle does not mean pretending Jev Desk's current DEX microcap/provider environment can reproduce 300 ms order-book market making. Treat author-style high frequency as a separate architecture/research arm and measure what is actually achievable with the available point-in-time data and API budget.
+
+### Immediate roadmap
+1. Verify #55/#56 behavior on additional untouched forward entries and expose active-monitor health in UI if useful.
+2. Design and implement versioned sub-15m cohorts without modifying the existing 15m control evidence.
+3. Keep realized exit-policy performance as the strategy headline; Hold benchmark stays a research comparator.
+4. Improve active monitoring/provider capacity if evidence shows observation gaps materially distort exits; preserve actual observed-fill accounting.
+5. Harden baseline-event idempotency/transactionality and refactor the giant inline DASHBOARD into a safer template/static file before more UI-heavy changes.
+6. Update this handoff after each material architecture/validation change.
