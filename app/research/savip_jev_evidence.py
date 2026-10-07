@@ -2,7 +2,6 @@
 from pydantic import BaseModel
 from typing import Any
 from app.providers.savip_social import exact_x_observation
-from app.providers.savip_social import exact_x_observation
 
 class MarketEvidence(BaseModel):
     price_usd:float|None=None;liquidity_usd:float|None=None;volume_h24_usd:float|None=None
