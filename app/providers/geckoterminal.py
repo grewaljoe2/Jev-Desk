@@ -4,7 +4,7 @@ from app.core.models import TokenSnapshot
 
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
-    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0
+    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
     async def _get(self,client,url,params=None):
         async with self._lock:
             wait=self._next_call_at-time.monotonic()
