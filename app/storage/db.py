@@ -102,3 +102,11 @@ async def clean_replay_rows(limit=500):
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("SELECT j.baseline_event_id,b.payload_json AS snapshot_payload,jsonb_agg(o.payload_json ORDER BY o.created_at) FILTER(WHERE o.id IS NOT NULL) AS outcomes FROM outcome_jobs j JOIN events b ON b.id=j.baseline_event_id LEFT JOIN events o ON o.event_type='OUTCOME' AND (o.payload_json->>'baseline_event_id')::bigint=j.baseline_event_id WHERE j.timing_provenance='clean_v061' AND j.baseline_event_id IS NOT NULL GROUP BY j.baseline_event_id,b.payload_json ORDER BY j.baseline_event_id DESC LIMIT %s",(limit,))
         return await cur.fetchall()
+
+async def scoreable_snapshot_quality():
+    """Count immutable snapshots by whether deterministic age is present."""
+    if not settings.database_url:return {"with_age":0,"missing_age":0,"latest_with_age":None}
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT count(*) FILTER(WHERE payload_json->>'age_minutes' IS NOT NULL),count(*) FILTER(WHERE payload_json->>'age_minutes' IS NULL),max(created_at) FILTER(WHERE payload_json->>'age_minutes' IS NOT NULL) FROM events WHERE event_type='SNAPSHOT'")
+        r=await cur.fetchone();return {"with_age":r[0],"missing_age":r[1],"latest_with_age":r[2].isoformat() if r[2] else None}
