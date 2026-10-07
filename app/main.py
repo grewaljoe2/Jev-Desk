@@ -57,9 +57,10 @@ fast_entry_worker=FastEntryWorker(provider,seconds=5)
 async def startup():
     await init_db()
     scheduler.start()
-    # Savip-exclusive shadow research: preserve historical data and existing
-    # positions, but stop legacy 15m/fast-entry/monitor/outcome API traffic.
-    # The shared discovery scheduler remains on for Savip candidate collection.
+    # Keep 15m pool qualification: its SNAPSHOT facts feed Savip FREE CUT.
+    qualification_worker.start()
+    # Pause legacy fast-entry, active-trade and outcome API polling.
+    # Shared discovery and qualification remain active for Savip.
     savip_dex_worker.start()
     savip_chain_worker.start()
     savip_jev_validation_worker.start()
