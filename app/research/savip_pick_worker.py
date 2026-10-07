@@ -1,7 +1,7 @@
 """Savip cross-candidate PICK worker. Shadow only; no order transport."""
 import asyncio
 from app.storage.db import recent_savip_soft_survivors,log_savip_pick,open_savip_positions,savip_pick_fingerprint_seen
-from app.research.savip_pick import PickResult,single_survivor
+from app.research.savip_pick import PickResult
 
 class SavipPickWorker:
     def __init__(self,provider,seconds=900):
@@ -15,15 +15,15 @@ class SavipPickWorker:
         if fp and await savip_pick_fingerprint_seen(fp):
             self.state="already_picked";return
         if not rows:self.state="no_survivors";return
-        if len(rows)==1:
-            p=single_survivor(rows[0]["token_id"]);p["accepted"]=True;p["token_id"]=rows[0]["token_id"];p["evidence"]=rows[0]["payload_json"].get("evidence");p["jev_fingerprint"]=",".join(str(x) for x in sorted(fp))
-            await log_savip_pick(p);self.state="single_survivor";return
         if not self.provider.configured:self.state="jev_not_configured";return
         candidates=[{"token_id":r["token_id"],"judgment":r["payload_json"].get("result",{}).get("judgment"),"evidence":r["payload_json"].get("evidence")} for r in rows]
         try:
             raw=await self.provider.pick(candidates)
             parsed=PickResult.model_validate(raw["pick"])
             accepted,reason=parsed.accepted()
+            allowed_ids={r["token_id"] for r in rows}
+            if parsed.winner and parsed.winner.token_id not in allowed_ids:
+                accepted,reason=False,"winner_not_in_candidates"
             winner_id=parsed.winner.token_id if parsed.winner else None
             winner_row=next((r for r in rows if r["token_id"]==winner_id),None)
             payload={"token_id":winner_id,"accepted":accepted,"reason":reason,"pick":parsed.model_dump(mode="json"),"model":raw.get("model"),"usage":raw.get("usage"),"candidate_count":len(rows),"jev_fingerprint":",".join(str(x) for x in sorted(fp)),"evidence":winner_row["payload_json"].get("evidence") if winner_row else None}
