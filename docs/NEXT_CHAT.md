@@ -1,0 +1,2 @@
+# Jev Desk — Next Chat
+Continue Jev Desk from docs/PROJECT_HANDOFF.md. Read that source of truth first and inspect the current main branch plus current Render deployment before changing code. Do not reset research or reintroduce rejected branches. Keep live execution disabled. Verify the latest merged build/deployment, then continue from the first unfinished milestone. Update PROJECT_HANDOFF.md in the same PR whenever a material architecture/research/deployment decision changes.
