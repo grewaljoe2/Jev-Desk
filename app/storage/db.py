@@ -163,7 +163,23 @@ async def fast_entry_discovery_funnel():
           count(*) FILTER(WHERE f.age_minutes IS NULL) AS missing_age
         FROM horizons h CROSS JOIN first_seen f
         GROUP BY h.cohort_minutes ORDER BY h.cohort_minutes""")
-        return await cur.fetchall()
+        rows=await cur.fetchall()
+        cur=await db.execute("""WITH first_seen AS (
+          SELECT DISTINCT ON (token_id) token_id,
+            split_part(token_id,':',1) AS chain,
+            NULLIF(payload_json->>'age_minutes','')::double precision AS age_minutes
+          FROM events WHERE event_type='DISCOVERY'
+          ORDER BY token_id,created_at ASC
+        )
+        SELECT chain,count(*) AS discovered,
+          count(*) FILTER(WHERE age_minutes<=1) AS within_1m,
+          count(*) FILTER(WHERE age_minutes<=3) AS within_3m,
+          count(*) FILTER(WHERE age_minutes<=5) AS within_5m,
+          count(*) FILTER(WHERE age_minutes<=10) AS within_10m,
+          avg(age_minutes) AS avg_first_seen_age_minutes
+        FROM first_seen WHERE age_minutes IS NOT NULL
+        GROUP BY chain ORDER BY discovered DESC""")
+        return {"horizons":rows,"by_chain":await cur.fetchall()}
 
 async def fast_entry_diagnostics():
     """Explain whether fast cohorts are empty because of filters, lateness, or backlog."""
