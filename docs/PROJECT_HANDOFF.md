@@ -169,3 +169,7 @@ This section supersedes the stale deployment-failure state above where it confli
 
 
 <!-- deploy-sync: 2026-10-07 PR70 fresh-first outcome policy -->
+
+
+### 2026-10-07 — Fresh-first outcome scheduling
+Production policy changed so fresh 1m/3m/5m/10m and 15m entry observations outrank historical outcome traffic. Historical outcome checks are spare-capacity only; stale point-in-time checks are retained as missed rather than fetched late, and remaining usable historical checks are newest-first. Real execution remains disabled.
