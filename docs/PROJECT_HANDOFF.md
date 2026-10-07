@@ -241,3 +241,10 @@ COLLECT -> FREE CUT -> TRADE CUT -> CHAIN/dossier -> typed Jev judgments -> soft
 - Do not mix MT5 research into Jev Desk.
 - Real execution stays OFF until a separate explicit post-validation decision.
 
+
+
+## 2026-10-07 verified exact-X SOCIAL production checkpoint
+
+PR #128 added the no-key FxTwitter/FxEmbed public exact-handle reader, verifies the returned handle against the dossier's exact project X handle, supplies observed profile/posts to Jev SOCIAL, and permits failed Jev claims to retry. PR #129 restored published missing-X behavior: if the project has no handle or the free public reader cannot provide an observation, SOCIAL evidence remains missing rather than fabricated, and the existing shadow sizing applies the 0.60 missing-X factor if the candidate ultimately qualifies. Real execution remains OFF. The free reader is third-party and availability/schema are not guaranteed; live evidence success and a paid TypeSafe call have NOT yet been verified.
+
+Verified Render deployment: `dep-db3bon2jnfac739bi6dg`, commit `e25b10793804ad28f9f026e477863f4517ea4a0c`, status LIVE, finished 2026-10-07T21:41:37.628157Z. This supersedes older production and missing-X statements above. Do not claim full end-to-end validation until a genuine CHAIN survivor is seen flowing through observed/missing SOCIAL, typed Jev, PICK and shadow BOOK with evidence. Next: production evidence verification, bounded 200 pool versus cumulative SCANNED audit, multi-candidate PICK sequencing, and remaining reliability items. Do not loosen gates or claim the free reader succeeded without a verified response.
