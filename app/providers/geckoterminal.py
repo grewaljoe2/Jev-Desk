@@ -1,4 +1,5 @@
-import asyncio,time,httpx\nfrom email.utils import parsedate_to_datetime
+import asyncio,time,httpx
+from email.utils import parsedate_to_datetime
 from datetime import datetime,timezone
 from app.providers.base import DiscoveryProvider
 from app.core.models import TokenSnapshot
