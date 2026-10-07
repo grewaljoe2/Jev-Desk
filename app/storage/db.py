@@ -65,7 +65,11 @@ async def savip_dex_targets(limit=25):
           ORDER BY token_id,created_at DESC
         )
         SELECT token_id,payload_json->>'chain' chain,payload_json->'raw'->>'pool_id' pool_id,payload_json
-        FROM c WHERE NULLIF(payload_json->>'age_minutes','')::double precision BETWEEN %s AND %s
+        FROM c WHERE CASE
+            WHEN COALESCE(payload_json->'raw'->>'pool_created_at',payload_json->>'pool_created_at') IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (NOW()-COALESCE(payload_json->'raw'->>'pool_created_at',payload_json->>'pool_created_at')::timestamptz))/60.0
+            ELSE NULLIF(payload_json->>'age_minutes','')::double precision
+          END BETWEEN %s AND %s
           AND NULLIF(payload_json->>'volume_h24_usd','')::double precision >= %s
           AND NULLIF(payload_json->>'mcap_usd','')::double precision BETWEEN %s AND %s
           AND (NULLIF(payload_json->>'liquidity_usd','')::double precision IS NULL OR NULLIF(payload_json->>'liquidity_usd','')::double precision >= %s)
