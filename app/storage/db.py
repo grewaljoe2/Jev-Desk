@@ -12,6 +12,8 @@ ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS baseline_event_id BIGINT;
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_price DOUBLE PRECISION;
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS last_marked_at TIMESTAMPTZ;
 ALTER TABLE virtual_positions ADD COLUMN IF NOT EXISTS provenance TEXT NOT NULL DEFAULT 'legacy_pre_forward';
+ALTER TABLE virtual_positions DROP CONSTRAINT IF EXISTS virtual_positions_token_id_arm_status_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_virtual_positions_one_open_per_arm ON virtual_positions(token_id,arm) WHERE status='open';
 CREATE TABLE IF NOT EXISTS shadow_exit_arms(id BIGSERIAL PRIMARY KEY,position_id BIGINT NOT NULL,policy TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',entry_price DOUBLE PRECISION NOT NULL,opened_at TIMESTAMPTZ NOT NULL,peak_price DOUBLE PRECISION NOT NULL,exit_price DOUBLE PRECISION,closed_at TIMESTAMPTZ,exit_reason TEXT,last_price DOUBLE PRECISION,last_marked_at TIMESTAMPTZ,UNIQUE(position_id,policy));
 CREATE TABLE IF NOT EXISTS outcome_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,horizon_minutes INTEGER NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',UNIQUE(token_id,horizon_minutes));
 ALTER TABLE outcome_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
