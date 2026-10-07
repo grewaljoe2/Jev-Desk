@@ -19,7 +19,7 @@ from app.research.savip_jev_candidate import latest_chain_pass
 from app.research.savip_jev_evidence import build_evidence
 from app.research.savip_jev_adapter import run_typed_jev
 from app.research.savip_jev_questions import QUESTION_SETS,RULES
-from app.storage.db import log_savip_jev
+from app.storage.db import log_savip_jev,claim_savip_jev,complete_savip_jev_claim
 from app.storage.db import init_db,recent_events,research_counts,due_outcome_jobs,outcome_quality,scoreable_snapshot_quality,qualification_health,qualification_decision_totals,shadow_position_summary,shadow_positions_detail,shadow_exit_summary,fast_entry_summary,fast_shadow_positions_detail,fast_entry_diagnostics,fast_entry_discovery_funnel,savip_candidate_pool
 from app.research.replay_dataset import load_clean_replay_samples,load_qualification_replay_samples
 from app.research.replay_pipeline import run_replay_research
@@ -112,10 +112,7 @@ async def savip_jev_ready():
 async def savip_jev_validate_once():
     row=await latest_chain_pass()
     if not row:return {"ok":False,"reason":"no_chain_pass_candidate","paid_call_made":False,"real_execution_enabled":False}
-    evidence=build_evidence(row["payload_json"])
-    result=await run_typed_jev(typesafe_jev,evidence,QUESTION_SETS,RULES)
-    await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
-    return {"ok":result.get("ok",False),"token_id":row["token_id"],"result":result,"paid_call_made":result.get("reason")!="jev_not_configured","pick_enabled":False,"real_execution_enabled":False}
+    if not typesafe_jev.configured:return {"ok":False,"reason":"jev_not_configured","paid_call_made":False,"real_execution_enabled":False}\n    claimed=await claim_savip_jev(row["chain_event_id"],row["token_id"])\n    if not claimed:return {"ok":False,"reason":"chain_event_already_claimed","token_id":row["token_id"],"paid_call_made":False,"real_execution_enabled":False}\n    evidence=build_evidence(row["payload_json"])\n    result=await run_typed_jev(typesafe_jev,evidence,QUESTION_SETS,RULES)\n    await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))\n    await complete_savip_jev_claim(row["chain_event_id"],"completed" if result.get("ok") else "failed")\n    return {"ok":result.get("ok",False),"token_id":row["token_id"],"result":result,"paid_call_made":True,"pick_enabled":False,"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():

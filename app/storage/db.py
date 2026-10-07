@@ -27,6 +27,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_outcome_jobs_legacy_token_horizon ON outco
 CREATE TABLE IF NOT EXISTS qualification_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,chain TEXT NOT NULL,pool_id TEXT NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT,completed_at TIMESTAMPTZ,UNIQUE(chain,pool_id));
 ALTER TABLE qualification_jobs ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_qualification_jobs_due ON qualification_jobs(status,due_at);
+CREATE TABLE IF NOT EXISTS savip_jev_claims(chain_event_id BIGINT PRIMARY KEY,token_id TEXT NOT NULL,claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),completed_at TIMESTAMPTZ,status TEXT NOT NULL DEFAULT 'claimed');
 CREATE TABLE IF NOT EXISTS fast_entry_jobs(id BIGSERIAL PRIMARY KEY,token_id TEXT NOT NULL,chain TEXT NOT NULL,pool_id TEXT NOT NULL,cohort_minutes INTEGER NOT NULL,due_at TIMESTAMPTZ NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,last_error TEXT,completed_at TIMESTAMPTZ,next_attempt_at TIMESTAMPTZ,UNIQUE(chain,pool_id,cohort_minutes));
 CREATE INDEX IF NOT EXISTS idx_fast_entry_jobs_due ON fast_entry_jobs(status,due_at);
 """
@@ -614,3 +615,16 @@ async def log_savip_jev(token_id,result,evidence):
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_JEV',%s,'savip_reference',%s::jsonb)",(token_id,payload))
         await db.commit()
+
+async def claim_savip_jev(chain_event_id:int,token_id:str):
+    if not settings.database_url:return False
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("INSERT INTO savip_jev_claims(chain_event_id,token_id) VALUES(%s,%s) ON CONFLICT(chain_event_id) DO NOTHING RETURNING chain_event_id",(chain_event_id,token_id))
+        row=await cur.fetchone();await db.commit();return bool(row)
+
+async def complete_savip_jev_claim(chain_event_id:int,status:str):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("UPDATE savip_jev_claims SET status=%s,completed_at=NOW() WHERE chain_event_id=%s",(status,chain_event_id));await db.commit()
