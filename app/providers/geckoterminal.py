@@ -28,6 +28,18 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
                     if s:out.append(s)
             except Exception as e:diag.setdefault(network,{})["error"]=f"{type(e).__name__}: {str(e)[:180]}"
         self.last_diagnostics=diag;return out
+    async def fetch_pools(self,network,pool_ids):
+        """Fetch up to 30 same-network pools in one public API request."""
+        ids=[p for p in pool_ids if p]
+        addresses=[p.split("_",1)[-1] for p in ids][:30]
+        if not addresses:return {}
+        r=await self._get(f"{self.BASE}/networks/{network}/pools/multi/{','.join(addresses)}")
+        r.raise_for_status();rows=r.json().get("data",[]) or []
+        out={}
+        for row in rows:
+            snap=self._snapshot(network,row)
+            if snap:out[row.get("id")]=snap
+        return out
     async def fetch_pool(self,network,pool_id):
         pool_address=(pool_id or "").split("_",1)[-1]
         if not pool_address:return None
