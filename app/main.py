@@ -112,7 +112,14 @@ async def savip_jev_ready():
 async def savip_jev_validate_once():
     row=await latest_chain_pass()
     if not row:return {"ok":False,"reason":"no_chain_pass_candidate","paid_call_made":False,"real_execution_enabled":False}
-    if not typesafe_jev.configured:return {"ok":False,"reason":"jev_not_configured","paid_call_made":False,"real_execution_enabled":False}\n    claimed=await claim_savip_jev(row["chain_event_id"],row["token_id"])\n    if not claimed:return {"ok":False,"reason":"chain_event_already_claimed","token_id":row["token_id"],"paid_call_made":False,"real_execution_enabled":False}\n    evidence=build_evidence(row["payload_json"])\n    result=await run_typed_jev(typesafe_jev,evidence,QUESTION_SETS,RULES)\n    await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))\n    await complete_savip_jev_claim(row["chain_event_id"],"completed" if result.get("ok") else "failed")\n    return {"ok":result.get("ok",False),"token_id":row["token_id"],"result":result,"paid_call_made":True,"pick_enabled":False,"real_execution_enabled":False}
+    if not typesafe_jev.configured:return {"ok":False,"reason":"jev_not_configured","paid_call_made":False,"real_execution_enabled":False}
+    claimed=await claim_savip_jev(row["chain_event_id"],row["token_id"])
+    if not claimed:return {"ok":False,"reason":"chain_event_already_claimed","token_id":row["token_id"],"paid_call_made":False,"real_execution_enabled":False}
+    evidence=build_evidence(row["payload_json"])
+    result=await run_typed_jev(typesafe_jev,evidence,QUESTION_SETS,RULES)
+    await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
+    await complete_savip_jev_claim(row["chain_event_id"],"completed" if result.get("ok") else "failed")
+    return {"ok":result.get("ok",False),"token_id":row["token_id"],"result":result,"paid_call_made":True,"pick_enabled":False,"real_execution_enabled":False}
 
 @app.get("/shadow-trades")
 async def shadow_trades():
