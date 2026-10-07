@@ -36,8 +36,9 @@ class SavipJevWorker:
             questions=QUESTION_SETS if x_observation is not None else {k:v for k,v in QUESTION_SETS.items() if k!="social"}
             result=await run_typed_jev(self.provider,evidence,questions,RULES)
             await log_savip_jev(row["token_id"],result,evidence.model_dump(mode="json"))
-            # Do not repeatedly spend paid Jev calls on the same failed dossier.
-            status="completed"
+            # Failed calls remain one-shot for this dossier; a fresh CHAIN event
+            # can be evaluated separately without silently losing the failure.
+            status="completed" if result.get("ok") else "failed_once"
             await complete_savip_jev_claim(row["chain_event_id"],status)
             if result.get("ok") and result.get("soft_pass"):
                 self.last_passed+=1
