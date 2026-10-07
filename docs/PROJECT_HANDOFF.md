@@ -166,3 +166,6 @@ This section supersedes the stale deployment-failure state above where it confli
 4. Improve active monitoring/provider capacity if evidence shows observation gaps materially distort exits; preserve actual observed-fill accounting.
 5. Harden baseline-event idempotency/transactionality and refactor the giant inline DASHBOARD into a safer template/static file before more UI-heavy changes.
 6. Update this handoff after each material architecture/validation change.
+
+
+<!-- deploy-sync: 2026-10-07 PR70 fresh-first outcome policy -->
