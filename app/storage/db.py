@@ -643,3 +643,21 @@ async def complete_first_savip_jev_validation(status:str):
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("UPDATE savip_jev_validation SET status=%s,completed_at=NOW() WHERE id=1",(status,));await db.commit()
+
+async def recent_savip_soft_survivors(minutes:int=20):
+    """Latest Jev soft-pass per token for the current PICK window."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT DISTINCT ON(token_id) id,token_id,payload_json,created_at FROM events
+          WHERE event_type='SAVIP_JEV' AND created_at>=NOW()-(%s * interval '1 minute')
+            AND payload_json->'result'->>'ok'='true' AND payload_json->'result'->>'soft_pass'='true'
+          ORDER BY token_id,created_at DESC""",(minutes,))
+        return [dict(r) for r in await cur.fetchall()]
+
+async def log_savip_pick(payload:dict):
+    if not settings.database_url:return
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_PICK',%s,'savip_reference',%s::jsonb)",(payload.get("token_id"),json.dumps(payload,default=str)));await db.commit()

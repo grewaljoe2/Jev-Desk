@@ -19,6 +19,26 @@ class TypeSafeJevProvider:
         if r.status_code>=400:raise RuntimeError(f"typesafe_http_{r.status_code}")
         return _flatten(r.json())
 
+    async def pick(self,candidates:list[dict])->dict:
+        """One typed cross-candidate call. Deterministic thresholds stay in code."""
+        if not self.api_key:raise RuntimeError("TYPESAFE_API_KEY_not_configured")
+        q={
+          "winner_token_id":{"type":"choice","instructions":"Which candidate is the best trade now? Choose only from the supplied token ids.","criteria":{x["token_id"]:x["token_id"] for x in candidates}},
+          "worth_trading_at_all":{"type":"noul","instructions":"Probability the selected winner is worth trading at all now."},
+          "winner_confidence":{"type":"noul","instructions":"Confidence the selected token is the best candidate in this set."},
+          "size_factor":{"type":"noul","instructions":"Prudent size factor from 0 to 1 for the selected winner."}}
+        body={"model":self.model,"state":{"candidates":candidates},"questions":q}
+        async with httpx.AsyncClient(timeout=20) as client:
+            r=await client.post(self.URL,headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=body)
+        if r.status_code in (401,403):raise RuntimeError("typesafe_auth_failed")
+        if r.status_code==429:raise RuntimeError("typesafe_rate_limited")
+        if r.status_code==529:raise RuntimeError("typesafe_overloaded")
+        if r.status_code>=400:raise RuntimeError(f"typesafe_http_{r.status_code}")
+        data=r.json();a=data.get("answers") or {}
+        def n(name):return float((a.get(name) or {})["noul"])
+        winner=(a.get("winner_token_id") or {})["choice"]
+        return {"pick":{"winner":{"token_id":winner,"worth_trading_at_all":n("worth_trading_at_all"),"winner_confidence":n("winner_confidence"),"size_factor":n("size_factor")}},"model":data.get("model"),"usage":data.get("usage")}
+
 def _native_questions(groups):
     q={}
     for _,items in groups.items():
