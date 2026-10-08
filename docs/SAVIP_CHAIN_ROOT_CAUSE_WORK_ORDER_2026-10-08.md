@@ -73,3 +73,9 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - PR #187 merged as 936c2b3d494bbaa6f30f214f12d93ad3b34213d1. Workflow run 37843532613 SUCCESS. Workflow now explicitly runs unittest discover -s tests -p test_solana_owner_coverage.py -v; converted seven pytest-style functions to unittest.TestCase and added two adversarial cases (nine total). The previous PR #186 workflow had NOT run those tests.
 - Remaining verifier gap: caller-provided complete=True cannot itself establish complete enumeration; must require independently validated collector attestation, mint/program/slot checks, duplicate-account rejection, and supply consistency before any production integration.
 - NEXT: strengthen offline verifier and tests for these invariants; assess cost and feasibility of owner-complete Solana data without paid API. No production RPC changes.
+
+## Offline evidence invariants verified — 2026-10-08
+- PR #188 initial run 37844046096 FAILED: literal escaped newlines caused SyntaxError. Corrected on head 87ece6314aebcfb112aa193f8ccc920fb85fda67.
+- GitHub workflow run 37844228791 SUCCESS, verified job log explicitly executed **14 Solana owner tests, all OK**. PR #188 merged dc5ae97cac33fcc0467e6f7f87efc4577247bd03.
+- Offline verifier optionally requires expected mint, token program and slot; duplicate token account IDs fail closed when evidence expectations supplied. It still accepts caller-provided complete=True, which is not a proof of completeness. Tests are synthetic and not a validation of live RPC or Token-2022 parsing.
+- NEXT: design independently verifiable complete-holder collector with consistent mint/program/snapshot and bounded no-cost provider usage; evaluate whether it is operationally feasible before any production integration. No live RPC/worker changes.
