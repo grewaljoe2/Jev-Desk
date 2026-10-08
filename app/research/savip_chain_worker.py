@@ -52,9 +52,12 @@ class SavipChainWorker:
                 if not d: raise RuntimeError("missing_dossier")
                 d={**row,**d}
                 if row["chain"]=="solana":
+                    d["solana_wallet_rpc_status"]="pending"
                     try:
                         sf=await self.sol_chain.fetch("solana",address)
-                        if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
+                        if sf:
+                            d["top_wallet_percent"]=sf.get("top_wallet_fraction")
+                            d["solana_wallet_rpc_status"]="ok"
                     except RuntimeError as rpc_error:
                         if "solana_rpc_" not in str(rpc_error):raise
                         # The GT dossier is still valid; do not claim the wallet check passed.
@@ -63,6 +66,8 @@ class SavipChainWorker:
                         d["solana_wallet_rpc_error"]=str(rpc_error)
                 missing=[key for key in ("holder_count","top_wallet_percent","top_10_percent","is_honeypot","mint_authority","freeze_authority") if d.get(key) is None]
                 d["missing_chain_fields"]=missing
+                if row["chain"]=="solana" and d.get("solana_wallet_rpc_status")!="ok":
+                    raise RuntimeError("solana_wallet_check_pending_unverified")
                 if d.get("solana_wallet_rpc_status")=="unavailable_rate_limited":
                     raise RuntimeError("solana_wallet_check_pending_429")
                 ok,reason=evaluate_chain(d)
