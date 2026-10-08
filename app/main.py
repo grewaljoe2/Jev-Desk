@@ -173,6 +173,11 @@ async def savip_shadow_data():
 async def savip_discovery_accounting_data():
     return {"ok":True,"discovery":await savip_discovery_accounting(),"shadow_only":True,"live_execution_enabled":False}
 
+@app.get("/savip-prechain-network-funnel")
+async def savip_prechain_network_funnel_endpoint(hours:int=72):
+    from app.storage.db import savip_prechain_network_funnel
+    return {"ok":True,**(await savip_prechain_network_funnel(hours)),"real_execution_enabled":False}
+
 @app.get("/savip-chain-rejection-audit")
 async def savip_chain_rejection_audit_endpoint(hours:int=72):
     from app.storage.db import savip_chain_rejection_audit
