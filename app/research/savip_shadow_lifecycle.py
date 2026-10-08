@@ -70,7 +70,7 @@ class SavipShadowEntryWorker:
         fill=simulated_market_fill(ticket,price)
         if fill.get("net_asset_usd",0)<=0 or fill.get("quantity",0)<=0:
             self.state="single_fee_exceeds_ticket";return
-        pos=await commit_savip_single_shadow_entry(row["id"],row["token_id"],ticket,price,fill)
+        pos=await commit_savip_single_shadow_entry(row["id"],row["token_id"],ticket,price,fill,self.bank_usd)
         self.state="single_open" if pos else "single_duplicate_or_held"
     async def loop(self):
         while True:
