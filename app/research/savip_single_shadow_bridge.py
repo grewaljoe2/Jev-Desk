@@ -1,5 +1,4 @@
 """Fail-closed standalone eligibility authorization for shadow BOOK (no comparative PICK)."""
-import math
 from datetime import datetime, timezone
 from app.research.savip_single_eligibility import decide_single_eligibility
 
