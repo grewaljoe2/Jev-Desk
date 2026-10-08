@@ -1,8 +1,8 @@
 """Frozen published Savip/Jev desk reference values. Shadow research only."""
 SAVIP_REFERENCE_VERSION="2026-09-23"
 HARD={
- "min_age_minutes":5,"max_age_hours":72,
- "min_liquidity_usd":12000,"min_volume_h24":40000,
+ "min_age_minutes":60,"max_age_hours":72,
+ "min_liquidity_usd":25000,"min_volume_h24":40000,
  "min_mcap_usd":60000,"max_mcap_usd":8000000,
  "min_trades_h24":150,"max_top_wallet":0.05,
  "max_top_10":0.60,"min_holders":80,
