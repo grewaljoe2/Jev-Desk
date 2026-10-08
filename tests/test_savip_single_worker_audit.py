@@ -12,7 +12,7 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
         p=type("Provider",(),{"configured":True,"pick":AsyncMock(),"judge_single_eligibility":AsyncMock(return_value={"eligibility":S,"model":"mock"})})()
         entry=AsyncMock()
         w=m.SavipPickWorker(p,on_accept=entry)
-        with patch.dict("os.environ",{"SAVIP_SINGLE_ELIGIBILITY_ENABLED":"true"}),patch.object(m,"open_savip_positions",AsyncMock(return_value=[])),patch.object(m,"recent_savip_soft_survivors",AsyncMock(return_value=[row()])),patch.object(m,"savip_pick_fingerprint_seen",AsyncMock(return_value=False)),patch.object(m,"savip_single_eligibility_seen",AsyncMock(return_value=False)),patch.object(m,"log_savip_single_eligibility",AsyncMock(return_value=True)) as log:
+        with patch.dict("os.environ",{"SAVIP_SINGLE_ELIGIBILITY_ENABLED":"true"}),patch.object(m,"open_savip_positions",AsyncMock(return_value=[])),patch.object(m,"recent_savip_soft_survivors",AsyncMock(return_value=[row()])),patch.object(m,"savip_pick_fingerprint_seen",AsyncMock(return_value=False)),patch.object(m,"savip_single_eligibility_seen",AsyncMock(return_value=False)),patch.object(m,"claim_savip_single_eligibility",AsyncMock(return_value=True)),patch.object(m,"complete_savip_single_eligibility_claim",AsyncMock()),patch.object(m,"log_savip_single_eligibility",AsyncMock(return_value=True)) as log:
             await w.run_cycle()
             self.assertEqual(w.state,"single_eligible_audited")
             self.assertTrue(log.await_args.args[0]["accepted"])
@@ -38,6 +38,13 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
             await w.run_single(row())
             self.assertEqual(w.state,"single_rejected_audited")
             self.assertEqual(log.await_args.args[0]["reason"],"confidence")
+    async def test_existing_claim_prevents_duplicate_model_spend(self):
+        p=type("Provider",(),{"configured":True,"judge_single_eligibility":AsyncMock()})()
+        w=m.SavipPickWorker(p)
+        with patch.dict("os.environ",{"SAVIP_SINGLE_ELIGIBILITY_ENABLED":"true"}),patch.object(m,"savip_single_eligibility_seen",AsyncMock(return_value=False)),patch.object(m,"claim_savip_single_eligibility",AsyncMock(return_value=False)):
+            await w.run_single(row())
+        self.assertEqual(w.state,"single_already_claimed")
+        p.judge_single_eligibility.assert_not_awaited()
     async def test_default_off_never_calls_provider(self):
         p=type("Provider",(),{"configured":True,"judge_single_eligibility":AsyncMock()})()
         w=m.SavipPickWorker(p)
