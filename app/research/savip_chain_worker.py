@@ -66,10 +66,10 @@ class SavipChainWorker:
                         d["solana_wallet_rpc_error"]=str(rpc_error)
                 missing=[key for key in ("holder_count","top_wallet_percent","top_10_percent","is_honeypot","mint_authority","freeze_authority") if d.get(key) is None]
                 d["missing_chain_fields"]=missing
-                if row["chain"]=="solana" and d.get("solana_wallet_rpc_status")!="ok":
-                    raise RuntimeError("solana_wallet_check_pending_unverified")
                 if d.get("solana_wallet_rpc_status")=="unavailable_rate_limited":
                     raise RuntimeError("solana_wallet_check_pending_429")
+                if row["chain"]=="solana" and d.get("solana_wallet_rpc_status")!="ok":
+                    raise RuntimeError("solana_wallet_check_pending_unverified")
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing,"top_10_percent":d.get("top_10_percent"),"holder_count":d.get("holder_count"),"top_wallet_percent":d.get("top_wallet_percent"),"top_10_limit_percent":60.0,"dossier_source":d.get("source")})
