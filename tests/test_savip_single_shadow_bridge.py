@@ -1,4 +1,5 @@
 import unittest
+from copy import deepcopy
 from datetime import datetime, timezone, timedelta
 from app.research.savip_single_shadow_bridge import authorize_single_shadow
 
@@ -8,8 +9,8 @@ E={"market":{"proposed_ticket_usd":36.0,"liquidity_usd":50000.0},"chain":{"chain
 S={"worth_trading_at_all":0.8,"confidence":0.7,"size_factor":0.5}
 
 def fixtures():
-    jev={"id":42,"token_id":TOKEN,"created_at":NOW,"payload_json":{"result":{"ok":True,"soft_pass":True,"judgment":{}},"evidence":E}}
-    eligibility={"id":51,"token_id":TOKEN,"created_at":NOW,"payload_json":{"jev_event_id":42,"accepted":True,"reason":"pass","eligibility":S,"decision_type":"standalone_eligibility","shadow_only":True}}
+    jev={"id":42,"token_id":TOKEN,"created_at":NOW,"payload_json":{"result":{"ok":True,"soft_pass":True,"judgment":{}},"evidence":deepcopy(E)}}
+    eligibility={"id":51,"token_id":TOKEN,"created_at":NOW,"payload_json":{"jev_event_id":42,"accepted":True,"reason":"pass","eligibility":deepcopy(S),"decision_type":"standalone_eligibility","shadow_only":True}}
     return eligibility,jev
 
 class BridgeContractTests(unittest.TestCase):
