@@ -17,3 +17,4 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_solana_owner_coverage.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_mock_collector.py' -v
       - run: python -m unittest discover -s tests -p 'test_savip_jev_ticket_evidence.py' -v
+      - run: python -m unittest discover -s tests -p 'test_savip_single_survivor.py' -v
