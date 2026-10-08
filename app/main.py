@@ -55,13 +55,6 @@ active_trade_worker=ActiveTradeWorker(provider,seconds=15)
 @app.on_event("startup")
 async def startup():
     await init_db()
-    # Private Render log only; no public endpoint, no handles or raw evidence.
-    try:
-        from app.storage.db import savip_private_jev_numeric_audit
-        for audit_row in await savip_private_jev_numeric_audit():
-            print("SAVIP_PRIVATE_JEV_NUMERIC_AUDIT",audit_row,flush=True)
-    except Exception as audit_error:
-        print("SAVIP_PRIVATE_JEV_NUMERIC_AUDIT_ERROR",type(audit_error).__name__,flush=True)
     scheduler.start()
     # Keep 5m pool qualification: its SNAPSHOT facts feed Savip FREE CUT.
     qualification_worker.start()
