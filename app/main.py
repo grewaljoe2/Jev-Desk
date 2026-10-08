@@ -175,8 +175,13 @@ async def savip_discovery_accounting_data():
 
 @app.get("/savip-jev-ready")
 async def savip_jev_ready():
-    row=await latest_chain_pass()
-    return {"ok":True,"jev_configured":typesafe_jev.configured,"chain_pass_candidate":bool(row),"token_id":row["token_id"] if row else None,"state":"fresh_chain_pass_available" if (typesafe_jev.configured and row) else ("waiting_for_chain_survivor" if typesafe_jev.configured else "jev_not_configured"),"paid_call_made":False,"real_execution_enabled":False}
+    from app.research.savip_jev_candidate import unjudged_chain_passes
+    from app.storage.db import open_savip_positions
+    pending=await unjudged_chain_passes(1)
+    held=await open_savip_positions()
+    row=pending[0] if pending else None
+    ready=bool(typesafe_jev.configured and row and not held)
+    return {"ok":True,"jev_configured":typesafe_jev.configured,"chain_pass_candidate":ready,"token_id":row["token_id"] if ready else None,"chain_event_id":row["chain_event_id"] if ready else None,"state":"fresh_chain_pass_available" if ready else ("jev_not_configured" if not typesafe_jev.configured else "blocked_by_open_position" if held else "waiting_for_unjudged_chain_survivor"),"paid_call_made":False,"real_execution_enabled":False}
 
 @app.post("/savip-jev-validate-once")
 async def savip_jev_validate_once():
