@@ -109,6 +109,38 @@ async def qualification_data():
 
 
 
+@app.get("/savip-pipeline-diagnostics")
+async def savip_pipeline_diagnostics():
+    """Small read-only status endpoint: actual worker states, persisted outcomes, and pending queue."""
+    from app.research.savip_jev_candidate import unjudged_chain_passes
+    from app.storage.db import recent_savip_jev_outcomes
+    return {
+        "ok": True,
+        "shadow_only": True,
+        "real_execution_enabled": False,
+        "chain": {
+            "checked_last_cycle": savip_chain_worker.last_checked,
+            "passed_last_cycle": savip_chain_worker.last_passed,
+            "last_error": savip_chain_worker.last_error,
+            "last_results": savip_chain_worker.last_candidate_results[:8],
+        },
+        "jev": {
+            "configured": typesafe_jev.configured,
+            "checked_last_cycle": savip_jev_worker.last_checked,
+            "passed_last_cycle": savip_jev_worker.last_passed,
+            "last_error": savip_jev_worker.last_error,
+            "pending_unclaimed_chain_passes": [
+                {"token_id": row["token_id"], "chain_event_id": row["chain_event_id"], "created_at": row["created_at"]}
+                for row in await unjudged_chain_passes(10)
+            ],
+            "recent_outcomes": await recent_savip_jev_outcomes(10),
+        },
+        "pick": {"state": savip_pick_worker.state, "last_error": savip_pick_worker.last_error},
+        "shadow_entry": {"state": savip_shadow_entry_worker.state, "last_error": savip_shadow_entry_worker.last_error},
+        "shadow_risk": {"state": savip_shadow_risk_worker.state, "last_error": savip_shadow_risk_worker.last_error},
+        "shadow_positions": await savip_positions_detail(10),
+    }
+
 @app.get("/savip-jev-outcomes")
 async def savip_jev_outcomes():
     from app.storage.db import recent_savip_jev_outcomes
