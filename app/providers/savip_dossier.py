@@ -18,6 +18,8 @@ class SavipDossierProvider:
         return {
           "holder_count":holders.get("count"),
           "top_10_percent":dist.get("top_10"),
+          "top_10_source":"geckoterminal.holders.distribution_percentage.top_10",
+          "top_10_exclusions_verified":False,
           "developer_holding_percentage":a.get("developer_holding_percentage"),
           "gt_score_details":a.get("gt_score_details"),
           "is_honeypot":a.get("is_honeypot"),
