@@ -57,6 +57,7 @@ class BridgeContractTests(unittest.TestCase):
     def test_held_position_never_commits(self):
         async def scenario():
             a,b=fixtures()
+            a["created_at"]=b["created_at"]=datetime.now(timezone.utc)
             market=type("Market",(),{"observe":AsyncMock()})()
             with patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \
                  patch("app.research.savip_shadow_lifecycle.savip_jev_event_by_id",new=AsyncMock(return_value=b)), \
