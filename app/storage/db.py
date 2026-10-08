@@ -976,3 +976,20 @@ async def savip_prechain_network_funnel(hours:int=72):
         row["free_awaiting_dex_in_sample"]=free_counts[net]-dex_counts[net]
         row["trade_qualified_in_sample"]=trade_counts[net]
     return {"available":True,"hours":hours,"definition":"Unique discoveries in window; downstream flags indicate ANY historical event. FREE/TRADE counts are current qualification among up to 10000 recent tokens, not historical admission events.","networks":rows,"free_trade_sample_scanned":pool["scanned"],"free_trade_sample_cap":10000,"free_cut_rejections":pool["kills"],"trade_cut_rejections":trade["kills"],"trade_missing_fields":trade["missing_fields"]}
+
+async def savip_private_jev_numeric_audit():
+    """Private startup audit for two fixed historical event IDs; numeric facts only."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT id,
+          payload_json #>> '{result,soft_reason}' AS reason,
+          payload_json #>> '{result,judgment,market,concentration_is_exit_risk}' AS concentration,
+          payload_json #>> '{result,judgment,market,liquidity_fits_ticket}' AS ticket_fit,
+          payload_json #>> '{evidence,market,liquidity_usd}' AS liquidity_usd,
+          payload_json #>> '{evidence,market,volume_h24_usd}' AS volume_h24_usd,
+          payload_json #>> '{evidence,chain,top_10_percent}' AS top10,
+          payload_json #>> '{evidence,chain,holder_count}' AS holders
+          FROM events WHERE event_type='SAVIP_JEV' AND id IN (59956,57049) ORDER BY id""")
+        return [dict(row) for row in await cur.fetchall()]
