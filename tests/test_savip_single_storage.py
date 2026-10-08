@@ -21,22 +21,22 @@ class FakePsycopg:
 class StorageTests(unittest.IsolatedAsyncioTestCase):
     async def test_insert_once(self):
         conn=Conn();FakePsycopg.AsyncConnection.connection=conn
-        with patch("app.storage.db.settings.database_url","postgres://mock"),patch.dict("sys.modules",{"psycopg":FakePsycopg}):
+        with patch("app.storage.db.settings",type("Settings",(),{"database_url":"postgres://mock"})()),patch.dict("sys.modules",{"psycopg":FakePsycopg}):
             result=await log_savip_single_eligibility({"jev_event_id":19,"token_id":"eth:a","accepted":False})
         self.assertTrue(result)
         self.assertTrue(any("INSERT INTO events" in q for q,_ in conn.sql))
         self.assertEqual(conn.commits,1)
     async def test_duplicate_no_insert(self):
         conn=Conn(exists=True);FakePsycopg.AsyncConnection.connection=conn
-        with patch("app.storage.db.settings.database_url","postgres://mock"),patch.dict("sys.modules",{"psycopg":FakePsycopg}):
+        with patch("app.storage.db.settings",type("Settings",(),{"database_url":"postgres://mock"})()),patch.dict("sys.modules",{"psycopg":FakePsycopg}):
             result=await log_savip_single_eligibility({"jev_event_id":19,"token_id":"eth:a"})
         self.assertFalse(result)
         self.assertFalse(any("INSERT INTO events" in q for q,_ in conn.sql))
     async def test_invalid_id(self):
-        with patch("app.storage.db.settings.database_url","postgres://mock"):
+        with patch("app.storage.db.settings",type("Settings",(),{"database_url":"postgres://mock"})()):
             with self.assertRaises(ValueError):await log_savip_single_eligibility({"jev_event_id":None})
     async def test_seen(self):
         conn=Conn(exists=True);FakePsycopg.AsyncConnection.connection=conn
-        with patch("app.storage.db.settings.database_url","postgres://mock"),patch.dict("sys.modules",{"psycopg":FakePsycopg}):
+        with patch("app.storage.db.settings",type("Settings",(),{"database_url":"postgres://mock"})()),patch.dict("sys.modules",{"psycopg":FakePsycopg}):
             self.assertTrue(await savip_single_eligibility_seen(19))
 if __name__=="__main__":unittest.main()
