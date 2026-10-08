@@ -68,3 +68,8 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - Owner verifier groups raw balances by owner and enforces 5% limit. It permits pass only when caller attests complete enumeration and observed sum matches supply. The collector must independently prove completeness; sum equality alone cannot prove that no accounts were omitted.
 - Solana standard getProgramAccounts has mint filtering but no native cursor pagination; large scans may be resource intensive. Token-2022 account extensions make fixed 165-byte account size filters unsafe for full coverage. Alchemy documents a paginated variant, but free allowance is unverified; do not buy API access.
 - NEXT: verify seven tests are actually collected, expand cases for duplicates, wrong mint, incomplete slot consistency and Token-2022, and design completeness attestation before production RPC changes.
+
+## CI fixture correction — 2026-10-08
+- PR #187 merged as 936c2b3d494bbaa6f30f214f12d93ad3b34213d1. Workflow run 37843532613 SUCCESS. Workflow now explicitly runs unittest discover -s tests -p test_solana_owner_coverage.py -v; converted seven pytest-style functions to unittest.TestCase and added two adversarial cases (nine total). The previous PR #186 workflow had NOT run those tests.
+- Remaining verifier gap: caller-provided complete=True cannot itself establish complete enumeration; must require independently validated collector attestation, mint/program/slot checks, duplicate-account rejection, and supply consistency before any production integration.
+- NEXT: strengthen offline verifier and tests for these invariants; assess cost and feasibility of owner-complete Solana data without paid API. No production RPC changes.
