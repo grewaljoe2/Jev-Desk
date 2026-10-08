@@ -1046,6 +1046,6 @@ async def commit_savip_single_shadow_entry(eligibility_id:int,token_id:str,ticke
         pos=await cur.fetchone()
         if not pos:return None
         payload={"eligibility_event_id":eligibility_id,"position_id":pos[0],"price":price,"ticket_usd":ticket,"fill":fill,"real_execution":False,"decision_type":"standalone_eligibility"}
-        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_SHADOW_ENTRY',%s,'savip_reference',%s::jsonb)",(token_id,json.dumps(payload,default=str)))
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES('SAVIP_SHADOW_ENTRY',%s,'savip_reference',%s::jsonb,NOW())",(token_id,json.dumps(payload,default=str)))
         await db.commit()
         return pos[0]
