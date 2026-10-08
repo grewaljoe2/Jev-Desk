@@ -5,16 +5,16 @@ from app.storage.db import log_event
 from app.storage.db import due_qualification_jobs,complete_qualification_job,defer_qualification_job
 
 class QualificationWorker:
-    """Entry-critical worker. Batch due checks by network to protect the 15m observation window."""
+    """Entry-critical worker. Batch due checks by network to protect the 5m observation window."""
     def __init__(self,provider,seconds=5):self.provider=provider;self.seconds=seconds;self.task=None
     async def _handle(self,job,snap):
         if not snap:
             await defer_qualification_job(job["id"],2,"pool_not_available");return
         if snap.age_minutes is None:
             await defer_qualification_job(job["id"],2,"age_unavailable");return
-        if snap.age_minutes < 15:
-            wait=max(1,int(15-snap.age_minutes)+1);await defer_qualification_job(job["id"],wait,"waiting_for_min_age");return
-        # Freeze the entry observation time after the >=15m guard. Provider construction time
+        if snap.age_minutes < 5:
+            wait=max(1,int(5-snap.age_minutes)+1);await defer_qualification_job(job["id"],wait,"waiting_for_min_age");return
+        # Freeze the entry observation time after the >=5m guard. Provider construction time
         # can precede lock/pacing waits; qualification evidence must use the actual check time.
         snap.observed_at=datetime.now(timezone.utc)
         created=(snap.raw or {}).get("pool_created_at")
@@ -30,7 +30,7 @@ class QualificationWorker:
         snap.raw["qualification_due_at"]=job["due_at"].isoformat() if hasattr(job["due_at"],"isoformat") else str(job["due_at"])
         snap.raw["qualification_actual_at"]=now.isoformat()
         snap.raw["qualification_lateness_seconds"]=max(0.0,(now-job["due_at"]).total_seconds())
-        # Savip-exclusive mode: retain 15m SNAPSHOT evidence, but do not
+        # Savip-exclusive mode: retain 5m SNAPSHOT evidence, but do not
         # generate legacy decisions, shadow entries, or outcome schedules.
         await log_event(Event(event_type="SNAPSHOT",token_id=snap.token_id,payload=snap.model_dump(mode="json")))
         await complete_qualification_job(job["id"])
