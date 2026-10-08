@@ -18,6 +18,7 @@ class SavipJevWorker:
         for row in await unjudged_chain_passes(self.cap):
             if not await claim_savip_jev(row["chain_event_id"],row["token_id"]):continue
             self.last_checked+=1
+            claim_finalized=False
             try:
                 payload=row["payload_json"]
                 x_observation=None
@@ -41,13 +42,15 @@ class SavipJevWorker:
                 # can be evaluated separately without silently losing the failure.
                 status="completed" if result.get("ok") else "failed_once"
                 await complete_savip_jev_claim(row["chain_event_id"],status)
+                claim_finalized=True
                 if result.get("ok") and result.get("soft_pass"):
                     self.last_passed+=1
                     if self.on_pass:await self.on_pass()
                 elif not result.get("ok"):self.last_error=result.get("reason","jev_provider_error")
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
-                await complete_savip_jev_claim(row["chain_event_id"],"failed_once")
+                if not claim_finalized:
+                    await complete_savip_jev_claim(row["chain_event_id"],"failed_once")
     async def loop(self):
         while True:
             try:await self.run_cycle()
