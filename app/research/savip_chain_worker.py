@@ -24,7 +24,8 @@ class SavipChainWorker:
             self.cycle_running=False;self.cycle_finished_at=datetime.now(timezone.utc).isoformat()
     async def _evaluate_cycle(self):
         if await open_savip_positions():return
-        funnel=await savip_candidate_pool(window_minutes=72*60)
+        # Match the audited 72h cohort; provider calls remain capped by self.cap.
+        funnel=await savip_candidate_pool(window_minutes=72*60,limit=10000)
         trade=await exact_trade_cut(funnel["free_cut_survivors"])
         if time.monotonic()<self._next_dossier_retry_at:
             self.last_error="dossier_provider_cooldown";return
