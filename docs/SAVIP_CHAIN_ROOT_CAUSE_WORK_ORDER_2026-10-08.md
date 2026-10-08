@@ -123,3 +123,8 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 ## Ticket evidence implementation — 2026-10-08
 - PR #193 opened (head 7d08f970) with MarketEvidence.proposed_ticket_usd from existing ticket_usd($1000, pool liquidity, factor 1.0, missing_x flag), Jev question clarified to judge the explicit proposed ticket; thresholds unchanged. Test file added. CI run 37851595867 in progress at last check; NOT merged/deployed yet.
 - Caution: verify tests actually discovered by CI and full test pass; no new live judgment or calibration claim until deployment and fresh candidate. Single-survivor PICK issue remains separate and unresolved.
+
+## Ticket/PICK rollout — 2026-10-08
+- PR #193 merged a2eeeff, focused ticket-evidence CI run 37851667874 passed with newly added test step; Render dep-db41bmk9v7es738o7e4g LIVE. Ticket evidence now includes a conservative explicit max shadow ticket ($1000 bank) for future Jev judgments; no thresholds altered. Historical Jev scores remain historical.
+- PR #194 merged 7e7a747, CI run 37852347831 SUCCESS, adds guard to avoid invoking multi-candidate PICK when exactly one survivor; state single_survivor_awaiting_independent_eligibility; no auto-accept, no model spend. Render deploy trigger was blocked by tool safety checks; as of last verification latest LIVE commit is a2eeeff. Verify whether auto-deploy happens; otherwise #194 remains merged but not live.
+- Important: single-survivor now waits, so an independent worth-trading-at-all/confidence decision path is still required; do not fabricate a winner or shadow trade. Continue investigating true qualifying candidate funnel and model calibration.
