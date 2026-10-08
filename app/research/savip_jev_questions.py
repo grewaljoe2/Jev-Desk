@@ -3,7 +3,7 @@ QUESTION_SETS={
  "market":{
    "concentration_is_exit_risk":"Probability holder concentration creates meaningful exit risk.",
    "momentum_already_spent":"Probability the current move is already substantially spent.",
-   "liquidity_fits_ticket":"Probability liquidity safely fits the proposed ticket.",
+   "liquidity_fits_ticket":"Probability available liquidity safely supports the explicit market.proposed_ticket_usd maximum shadow ticket; consider sell-side liquidity uncertainty, not just the pool's headline liquidity. If the ticket is absent, do not invent it.",
    "shape":"Classify market shape: healthy, fading, one_buyer, or unclear.",
    "sell_side_risk":"Classify sell-side evidence: clean, flagged, suspicious, or unclear.",
  },
