@@ -79,3 +79,8 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - GitHub workflow run 37844228791 SUCCESS, verified job log explicitly executed **14 Solana owner tests, all OK**. PR #188 merged dc5ae97cac33fcc0467e6f7f87efc4577247bd03.
 - Offline verifier optionally requires expected mint, token program and slot; duplicate token account IDs fail closed when evidence expectations supplied. It still accepts caller-provided complete=True, which is not a proof of completeness. Tests are synthetic and not a validation of live RPC or Token-2022 parsing.
 - NEXT: design independently verifiable complete-holder collector with consistent mint/program/snapshot and bounded no-cost provider usage; evaluate whether it is operationally feasible before any production integration. No live RPC/worker changes.
+
+## Solana complete-holder collector feasibility contract — 2026-10-08
+- Drafted docs/SOLANA_OWNER_COMPLETE_COLLECTOR_FEASIBILITY_2026-10-08.md (research only). Separates token-program ownership from token-account authority, warns standard getProgramAccounts lacks pagination and minContextSlot is NOT a snapshot pin, and identifies Token-2022 extensions/withheld fees and LP ambiguity.
+- No new provider selected or paid. Public RPC has observed 429s; no large scans authorized. Existing 14 verifier tests do not validate collector completeness.
+- NEXT: verify provider free-tier and consistent snapshot feasibility; build MOCK collector adapter with 429/partial/duplicate/slot/Token-2022 cases before any production wiring. Keep Solana fail-closed, continue separate downstream pipeline diagnosis.
