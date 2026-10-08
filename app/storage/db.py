@@ -844,3 +844,51 @@ async def reconcile_stale_savip_jev_claims():
         unresolved=len(await cur.fetchall())
         await db.commit()
     return {"completed":completed,"unresolved":unresolved}
+
+
+async def savip_chain_rejection_audit(hours:int=72):
+    """Read-only CHAIN funnel: count decisions, unique tokens, and retry telemetry separately."""
+    if not settings.database_url:return {"available":False,"reason":"postgres_unavailable"}
+    hours=max(1,min(int(hours),24*30))
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""WITH decisions AS (
+          SELECT token_id,created_at,split_part(token_id,':',1) AS network,
+            COALESCE(NULLIF(payload_json->>'chain_reason',''),'unknown') AS reason,
+            payload_json->>'chain_pass' AS passed,
+            CASE WHEN (payload_json->>'top_10_percent') ~ '^[0-9]+(\\.[0-9]+)?$'
+              THEN (payload_json->>'top_10_percent')::numeric END AS top10,
+            CASE WHEN (payload_json->>'holder_count') ~ '^[0-9]+$'
+              THEN (payload_json->>'holder_count')::numeric END AS holders,
+            CASE WHEN (payload_json->>'liquidity_usd') ~ '^[0-9]+(\\.[0-9]+)?$'
+              THEN (payload_json->>'liquidity_usd')::numeric END AS liquidity
+          FROM events WHERE event_type='SAVIP_CHAIN'
+            AND created_at>=NOW()-(%s * INTERVAL '1 hour')
+        ) SELECT network,reason,passed,COUNT(*) AS decisions,
+          COUNT(DISTINCT token_id) AS unique_tokens,
+          COUNT(*)-COUNT(DISTINCT token_id) AS repeat_decisions,
+          ROUND(AVG(top10),2) AS avg_top10_percent,
+          ROUND(AVG(holders),1) AS avg_holders,
+          ROUND(AVG(liquidity),2) AS avg_liquidity_usd
+          FROM decisions GROUP BY network,reason,passed
+          ORDER BY decisions DESC""",(hours,))
+        breakdown=[dict(row) for row in await cur.fetchall()]
+        cur=await db.execute("""SELECT split_part(token_id,':',1) AS network,
+          COUNT(*) AS observations,COUNT(DISTINCT token_id) AS unique_tokens
+          FROM events WHERE event_type='DISCOVERY'
+            AND created_at>=NOW()-(%s * INTERVAL '1 hour')
+          GROUP BY 1 ORDER BY observations DESC""",(hours,))
+        discovery=[dict(row) for row in await cur.fetchall()]
+        cur=await db.execute("""SELECT split_part(token_id,':',1) AS network,
+          COALESCE(NULLIF(payload_json->>'reason',''),'unknown') AS reason,
+          COUNT(*) AS attempts,COUNT(DISTINCT token_id) AS unique_tokens
+          FROM events WHERE event_type='SAVIP_CHAIN_ATTEMPT'
+            AND created_at>=NOW()-(%s * INTERVAL '1 hour')
+          GROUP BY 1,2 ORDER BY attempts DESC""",(hours,))
+        retries=[dict(row) for row in await cur.fetchall()]
+    for rows in (breakdown,discovery,retries):
+        for row in rows:
+            for k,v in row.items():
+                if hasattr(v,"as_tuple"):row[k]=float(v)
+    return {"available":True,"hours":hours,"definition":"Persisted CHAIN decisions only; retry/error attempts separately; counts include repeat evaluations","chain_decisions":breakdown,"discovery":discovery,"retry_attempts":retries}
