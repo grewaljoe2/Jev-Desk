@@ -813,3 +813,34 @@ async def savip_chain_jev_claim_audit(limit:int=100):
           ORDER BY e.created_at DESC LIMIT %s""",(max(1,min(limit,200)),))
         rows=await cur.fetchall()
     return [{k:(v.isoformat() if hasattr(v,"isoformat") else v) for k,v in dict(row).items()} for row in rows]
+
+async def reconcile_stale_savip_jev_claims():
+    """Conservatively classify stale claims; never resubmit paid Jev calls.
+
+    Only an outcome between the claim's own CHAIN event and the next CHAIN
+    event for that token can complete it. Otherwise leave it unresolved.
+    """
+    if not settings.database_url:return {"completed":0,"unresolved":0}
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("""UPDATE savip_jev_claims c
+          SET status='completed',completed_at=NOW()
+          FROM events e
+          WHERE e.id=c.chain_event_id AND c.status='claimed'
+            AND c.claimed_at<NOW()-interval '10 minutes'
+            AND EXISTS (SELECT 1 FROM events j
+              WHERE j.event_type='SAVIP_JEV' AND j.token_id=e.token_id
+                AND j.created_at>=e.created_at
+                AND j.created_at<COALESCE(
+                  (SELECT MIN(n.created_at) FROM events n
+                   WHERE n.event_type='SAVIP_CHAIN' AND n.token_id=e.token_id
+                     AND n.created_at>e.created_at), 'infinity'::timestamptz))
+          RETURNING c.chain_event_id""")
+        completed=len(await cur.fetchall())
+        cur=await db.execute("""UPDATE savip_jev_claims
+          SET status='unresolved_no_outcome'
+          WHERE status='claimed' AND claimed_at<NOW()-interval '10 minutes'
+          RETURNING chain_event_id""")
+        unresolved=len(await cur.fetchall())
+        await db.commit()
+    return {"completed":completed,"unresolved":unresolved}
