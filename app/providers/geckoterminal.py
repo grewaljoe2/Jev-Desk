@@ -3,6 +3,7 @@ from email.utils import parsedate_to_datetime
 from datetime import datetime,timezone
 from app.providers.base import DiscoveryProvider
 from app.core.models import TokenSnapshot
+from app.strategy.reference_thresholds import HARD
 
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
@@ -34,15 +35,24 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         network=self.DISCOVERY_SEQUENCE[self._discovery_index%len(self.DISCOVERY_SEQUENCE)]
         slot=self._discovery_index%len(self.DISCOVERY_SEQUENCE)
         self._discovery_index=(self._discovery_index+1)%len(self.DISCOVERY_SEQUENCE)
-        out=[];diag={"mode":"weighted_fast_v1","network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
+        out=[];diag={"mode":"eligible_trending_pools_v1","network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
         try:
-            r=await self._get(f"{self.BASE}/networks/{network}/new_pools",params={"page":1});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
+            r=await self._get(f"{self.BASE}/networks/{network}/trending_pools",params={"page":1});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
             rows=r.json().get("data",[]);diag["rows"]=len(rows)
             for row in rows[:20]:
                 s=self._snapshot(network,row)
-                if s:out.append(s)
+                if s and self._discovery_gate(s) is None:out.append(s)
         except Exception as e:diag["error"]=f"{type(e).__name__}: {str(e)[:180]}"
         self.last_diagnostics=diag;return out
+    @staticmethod
+    def _discovery_gate(s):
+        if s.age_minutes is None:return "missing_age"
+        if s.age_minutes<HARD["min_age_minutes"]:return "too_young"
+        if s.age_minutes>HARD["max_age_hours"]*60:return "too_old"
+        if s.liquidity_usd is None or s.liquidity_usd<HARD["min_liquidity_usd"]:return "liquidity"
+        if s.volume_h24_usd is None or s.volume_h24_usd<HARD["min_volume_h24"]:return "volume"
+        if s.mcap_usd is None or not HARD["min_mcap_usd"]<=s.mcap_usd<=HARD["max_mcap_usd"]:return "market_cap"
+        return None
     async def fetch_pools(self,network,pool_ids):
         """Fetch up to 30 same-network pools in one public API request."""
         ids=[p for p in pool_ids if p]
