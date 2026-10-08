@@ -83,7 +83,9 @@ class SavipChainWorker:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
                 await self._record_attempt(row.get("token_id"),self.last_error)
                 self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) else "error","reason":self.last_error})
-                if "429" not in str(e):
+                if "429" in str(e):
+                    self._recent_tokens[row["token_id"]]=time.monotonic()+300.0
+                else:
                     self._recent_tokens[row["token_id"]]=time.monotonic()+120.0
                 if "solana_rpc_rate_limited_429" in str(e) or "solana_rpc_cooldown_429" in str(e):
                     # Avoid exhausting a cooling Solana RPC; other chains remain eligible.
