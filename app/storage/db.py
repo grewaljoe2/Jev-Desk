@@ -1001,3 +1001,51 @@ async def savip_prechain_network_funnel(hours:int=72):
         row["trade_qualified_in_sample"]=trade_counts[net]
     return {"available":True,"hours":hours,"definition":"Unique discoveries in window; downstream flags indicate ANY historical event. FREE/TRADE counts are current qualification among up to 10000 recent tokens, not historical admission events.","networks":rows,"free_trade_sample_scanned":pool["scanned"],"free_trade_sample_cap":10000,"free_cut_rejections":pool["kills"],"trade_cut_rejections":trade["kills"],"trade_missing_fields":trade["missing_fields"]}
 
+
+async def latest_accepted_savip_single_eligibility():
+    """Newest audited standalone decision; no fabricated comparative PICK."""
+    if not settings.database_url:return None
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT id,token_id,payload_json,created_at FROM events
+          WHERE event_type='SAVIP_SINGLE_ELIGIBILITY' AND payload_json->>'accepted'='true'
+          ORDER BY created_at DESC,id DESC LIMIT 1""")
+        row=await cur.fetchone()
+        return dict(row) if row else None
+
+async def savip_jev_event_by_id(event_id:int):
+    if not settings.database_url or type(event_id) is not int or event_id<=0:return None
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("SELECT id,token_id,payload_json,created_at FROM events WHERE id=%s AND event_type='SAVIP_JEV'",(event_id,))
+        row=await cur.fetchone()
+        return dict(row) if row else None
+
+async def commit_savip_single_shadow_entry(eligibility_id:int,token_id:str,ticket:float,price:float,fill:dict):
+    """Atomic shadow BOOK insert and event, serialized across all Savip entry workers."""
+    import math
+    if not settings.database_url:raise RuntimeError("postgres_unavailable")
+    if type(eligibility_id) is not int or eligibility_id<=0 or not isinstance(token_id,str) or not token_id.strip():
+        raise ValueError("invalid_entry_identity")
+    if any(type(v) not in (int,float) or not math.isfinite(v) or v<=0 for v in (ticket,price,fill.get("net_asset_usd"),fill.get("quantity"))):
+        raise ValueError("invalid_shadow_fill")
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("SELECT pg_advisory_xact_lock(734101, 1)")
+        cur=await db.execute("""SELECT 1 FROM events WHERE event_type='SAVIP_SHADOW_ENTRY'
+          AND payload_json->>'eligibility_event_id'=%s LIMIT 1""",(str(eligibility_id),))
+        if await cur.fetchone():return None
+        cur=await db.execute("SELECT 1 FROM virtual_positions WHERE arm='savip_reference' AND status='open' LIMIT 1")
+        if await cur.fetchone():return None
+        cur=await db.execute("""INSERT INTO virtual_positions(token_id,arm,status,requested_size_usd,filled_size_usd,entry_price,opened_at,provenance)
+          VALUES(%s,'savip_reference','open',%s,%s,%s,NOW(),'savip_single_eligibility_shadow')
+          ON CONFLICT (token_id,arm) WHERE status='open' DO NOTHING RETURNING id""",
+          (token_id,ticket,fill["net_asset_usd"],price))
+        pos=await cur.fetchone()
+        if not pos:return None
+        payload={"eligibility_event_id":eligibility_id,"position_id":pos[0],"price":price,"ticket_usd":ticket,"fill":fill,"real_execution":False,"decision_type":"standalone_eligibility"}
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_SHADOW_ENTRY',%s,'savip_reference',%s::jsonb)",(token_id,json.dumps(payload,default=str)))
+        await db.commit()
+        return pos[0]
