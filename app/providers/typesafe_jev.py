@@ -39,6 +39,27 @@ class TypeSafeJevProvider:
         winner=(a.get("winner_token_id") or {})["choice"]
         return {"pick":{"winner":{"token_id":winner,"worth_trading_at_all":n("worth_trading_at_all"),"winner_confidence":n("winner_confidence"),"size_factor":n("size_factor")}},"model":data.get("model"),"usage":data.get("usage")}
 
+    async def judge_single_eligibility(self, token_id:str, judgment:dict, evidence:dict)->dict:
+        """Independent single-candidate eligibility judgment; never invokes comparative PICK."""
+        if not self.api_key:raise RuntimeError("TYPESAFE_API_KEY_not_configured")
+        if not token_id or not isinstance(judgment,dict) or not isinstance(evidence,dict):
+            raise ValueError("missing_single_candidate_evidence")
+        q={
+          "worth_trading_at_all":{"type":"noul","instructions":"Probability this one token is worth trading at all now, independently of other candidates. Use only supplied evidence. Do not invent missing facts."},
+          "confidence":{"type":"noul","instructions":"Confidence in this token's standalone trade eligibility based only on the supplied evidence; not confidence that it wins a comparison."},
+          "size_factor":{"type":"noul","instructions":"Prudent shadow-only size factor from 0 to 1, considering uncertainty. Zero if no prudent trade."}}
+        body={"model":self.model,"state":{"token_id":token_id,"judgment":judgment,"evidence":evidence},"questions":q}
+        async with httpx.AsyncClient(timeout=20) as client:
+            response=await client.post(self.URL,headers={"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"},json=body)
+        if response.status_code in (401,403):raise RuntimeError("typesafe_auth_failed")
+        if response.status_code==429:raise RuntimeError("typesafe_rate_limited")
+        if response.status_code==529:raise RuntimeError("typesafe_overloaded")
+        if response.status_code>=400:raise RuntimeError(f"typesafe_http_{response.status_code}")
+        data=response.json()
+        answers=data.get("answers") or {}
+        scores={key:float(answers[key]["noul"]) for key in ("worth_trading_at_all","confidence","size_factor")}
+        return {"eligibility":scores,"model":data.get("model"),"usage":data.get("usage")}
+
 def _native_questions(groups):
     q={}
     for _,items in groups.items():
