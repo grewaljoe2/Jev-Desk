@@ -32,3 +32,13 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - Confirmed persistence semantics: successful *and rejected* evaluated CHAIN records are SAVIP_CHAIN; errors are SAVIP_CHAIN_ATTEMPT; a 429 attempt is not a completed CHAIN decision. Persisted dedup checks SAVIP_CHAIN only.
 - Confirmed public RPC's getTokenLargestAccounts yields token accounts, not verified owners. Do not treat an RPC 200 as owner-verification success until semantics are fixed.
 - Next evidence requirement: quantify how many current TRADE survivors lie outside latest 1000 unique discoveries; then measure remaining exclusions and selected/attempted counts. Do not assert the 1000 cap is the dominant cause without this measurement.
+
+## Step 1 LIVE measurement — confirmed 2026-10-08
+- PR #184 merge 1d24382c16b7bf22587db8811c6f51130e5fef6f; Render dep-db3uikh42hec73f49etg LIVE. Endpoint /savip-chain-visibility-audit?hours=72 returned HTTP 200.
+- 6870 discoveries scanned by full cohort; worker sees latest 1000.
+- Solana 25 TRADE qualified: **15 outside worker 1000**, 10 visible with no persisted CHAIN in 24h.
+- BSC 28 TRADE qualified: **28 outside worker 1000**.
+- Base 1 TRADE qualified: **1 outside worker 1000**.
+- ETH 2 TRADE qualified: 2 visible, both already persisted CHAIN in last 24h.
+- This CONFIRMS discovery-window truncation excludes valid TRADE candidates. Snapshot is not a measure of actual attempts, open-position gating, or cooldown effects.
+- **NEXT: Step 2** repair worker candidate selection to include qualified 72h cohort without unbounded provider calls; preserve cap 6 per cycle, cooldowns, 24h dedup, position lock, no gate changes. Test fairness and dedup, then CI/merge/deploy/re-audit. Investigate remaining Solana 10 visible separately after this repair.
