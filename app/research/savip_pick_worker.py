@@ -1,5 +1,6 @@
 """Savip cross-candidate PICK worker. Shadow only; no order transport."""
 import asyncio
+import os
 from datetime import datetime,timezone
 from app.storage.db import savip_single_eligibility_seen,log_savip_single_eligibility
 from app.research.savip_single_audit import build_single_audit
@@ -53,6 +54,8 @@ class SavipPickWorker:
         evidence=payload.get("evidence")
         if result.get("ok") is not True or result.get("soft_pass") is not True or not isinstance(result.get("judgment"),dict) or not isinstance(evidence,dict):
             self.state="single_invalid_evidence";return
+        if os.getenv("SAVIP_SINGLE_ELIGIBILITY_ENABLED","false").lower() not in ("true","1","yes"):
+            self.state="single_eligibility_disabled";return
         if not self.provider.configured:
             self.state="jev_not_configured";return
         try:
