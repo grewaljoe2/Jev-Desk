@@ -1034,6 +1034,36 @@ async def commit_savip_single_shadow_entry(eligibility_id:int,token_id:str,ticke
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("SELECT pg_advisory_xact_lock(734101, 1)")
+        # Revalidate the event under the entry lock: the worker's earlier
+        # eligibility read is not a durable authorization.
+        cur=await db.execute("""SELECT token_id,payload_json,created_at FROM events
+          WHERE id=%s AND event_type='SAVIP_SINGLE_ELIGIBILITY'
+            AND payload_json->>'accepted'='true'
+            AND created_at BETWEEN NOW()-interval '15 minutes' AND NOW()""",(eligibility_id,))
+        source=await cur.fetchone()
+        if not source or source[0]!=token_id:return None
+        source_payload=source[1]
+        if not isinstance(source_payload,dict) or source_payload.get("decision_type")!="standalone_eligibility" or source_payload.get("shadow_only") is not True:
+            return None
+        jev_id=source_payload.get("jev_event_id")
+        if type(jev_id) is not int or jev_id<=0:return None
+        cur=await db.execute("""SELECT token_id,payload_json,created_at FROM events
+          WHERE id=%s AND event_type='SAVIP_JEV'
+            AND created_at BETWEEN NOW()-interval '15 minutes' AND NOW()""",(jev_id,))
+        origin=await cur.fetchone()
+        if not origin or origin[0]!=token_id:return None
+        from app.research.savip_single_eligibility import decide_single_eligibility
+        result=origin[1].get("result") if isinstance(origin[1],dict) else None
+        if not isinstance(result,dict) or result.get("ok") is not True or result.get("soft_pass") is not True or not isinstance(result.get("judgment"),dict):
+            return None
+        accepted,reason,parsed=decide_single_eligibility(source_payload.get("eligibility"),token_id,origin[0],origin[1].get("evidence"))
+        if not accepted or source_payload.get("reason")!="pass":return None
+        from app.research.savip_shadow_execution import ticket_usd,simulated_market_fill
+        evidence=origin[1]["evidence"]
+        social=evidence.get("social") or {}
+        market_liquidity=evidence["market"]["liquidity_usd"]
+        if ticket > ticket_usd(1000.0,market_liquidity,parsed.size_factor,missing_x=not bool(social.get("x_observation")))+1e-8:
+            return None
         cur=await db.execute("""SELECT 1 FROM events WHERE event_type='SAVIP_SHADOW_ENTRY'
           AND payload_json->>'eligibility_event_id'=%s LIMIT 1""",(str(eligibility_id),))
         if await cur.fetchone():return None
