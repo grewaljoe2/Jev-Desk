@@ -12,7 +12,7 @@ class SingleSurvivorTests(unittest.IsolatedAsyncioTestCase):
             provider=type("Provider",(),{"configured":True,"pick":AsyncMock()})()
             worker=module.SavipPickWorker(provider)
             await worker.run_cycle()
-            self.assertEqual(worker.state,"single_survivor_awaiting_independent_eligibility")
+            self.assertEqual(worker.state,"single_invalid_source")
             provider.pick.assert_not_awaited()
         finally:
             module.open_savip_positions,module.recent_savip_soft_survivors,module.savip_pick_fingerprint_seen=old
