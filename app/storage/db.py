@@ -678,6 +678,30 @@ async def log_savip_pick(payload:dict):
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES('SAVIP_PICK',%s,'savip_reference',%s::jsonb,CURRENT_TIMESTAMP)",(payload.get("token_id"),json.dumps(payload,default=str)));await db.commit()
 
+async def savip_single_eligibility_seen(jev_event_id:int):
+    """Deduplicate standalone eligibility decisions by originating Jev event."""
+    if not settings.database_url:return False
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("SELECT 1 FROM events WHERE event_type='SAVIP_SINGLE_ELIGIBILITY' AND payload_json->>'jev_event_id'=%s LIMIT 1",(str(jev_event_id),))
+        return bool(await cur.fetchone())
+
+async def log_savip_single_eligibility(payload:dict):
+    """Audit-only event. Never writes SAVIP_PICK or opens BOOK."""
+    if not settings.database_url:raise RuntimeError("postgres_unavailable")
+    if not isinstance(payload,dict) or not isinstance(payload.get("jev_event_id"),int) or payload["jev_event_id"]<=0:
+        raise ValueError("missing_jev_event_id")
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        await db.execute("""SELECT pg_advisory_xact_lock(734100, %s)""",(payload["jev_event_id"],))
+        cur=await db.execute("SELECT 1 FROM events WHERE event_type='SAVIP_SINGLE_ELIGIBILITY' AND payload_json->>'jev_event_id'=%s LIMIT 1",(str(payload["jev_event_id"]),))
+        if await cur.fetchone():
+            await db.commit()
+            return False
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES('SAVIP_SINGLE_ELIGIBILITY',%s,'savip_reference',%s::jsonb,CURRENT_TIMESTAMP)",(payload.get("token_id"),json.dumps(payload,default=str)))
+        await db.commit()
+        return True
+
 async def latest_accepted_savip_pick():
     if not settings.database_url:return None
     import psycopg
