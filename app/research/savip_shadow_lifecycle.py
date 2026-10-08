@@ -1,5 +1,6 @@
 """PRICE -> SIZE -> FILLS -> BOOK shadow entry lifecycle. No real order transport."""
 import asyncio
+import os
 import math
 from app.research.savip_single_shadow_bridge import authorize_single_shadow
 from app.storage.db import latest_accepted_savip_single_eligibility,savip_jev_event_by_id,commit_savip_single_shadow_entry
@@ -48,6 +49,8 @@ class SavipShadowEntryWorker:
         await log_savip_lifecycle("SAVIP_SHADOW_ENTRY",row["token_id"],{"pick_event_id":row["id"],"position_id":pos,"price":price,"ticket_usd":ticket,"fill":fill,"real_execution":False})
         self.state="open"
     async def run_single_entry(self):
+        if os.getenv("SAVIP_SINGLE_SHADOW_ENTRY_ENABLED","false").lower() not in ("true","1","yes"):
+            self.state="single_entry_disabled";return
         row=await latest_accepted_savip_single_eligibility()
         if not row:
             self.state="waiting";return
