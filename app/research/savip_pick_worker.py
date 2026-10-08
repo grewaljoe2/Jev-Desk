@@ -4,8 +4,8 @@ from app.storage.db import recent_savip_soft_survivors,log_savip_pick,open_savip
 from app.research.savip_pick import PickResult
 
 class SavipPickWorker:
-    def __init__(self,provider,seconds=60):
-        self.provider=provider;self.seconds=seconds;self.task=None
+    def __init__(self,provider,seconds=30,on_accept=None):
+        self.provider=provider;self.seconds=seconds;self.on_accept=on_accept;self.task=None
         self.state="waiting";self.last_error=None
     async def run_cycle(self):
         if await open_savip_positions():
@@ -28,6 +28,7 @@ class SavipPickWorker:
             winner_row=next((r for r in rows if r["token_id"]==winner_id),None)
             payload={"token_id":winner_id,"accepted":accepted,"reason":reason,"pick":parsed.model_dump(mode="json"),"model":raw.get("model"),"usage":raw.get("usage"),"candidate_count":len(rows),"jev_fingerprint":",".join(str(x) for x in sorted(fp)),"evidence":winner_row["payload_json"].get("evidence") if winner_row else None}
             await log_savip_pick(payload);self.state="accepted" if accepted else "no_trade"
+            if accepted and self.on_accept:await self.on_accept()
         except Exception as e:
             self.state="failed";self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
     async def loop(self):

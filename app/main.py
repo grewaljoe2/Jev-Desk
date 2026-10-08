@@ -44,7 +44,8 @@ savip_jev_worker=SavipJevWorker(typesafe_jev,on_pass=savip_pick_worker.run_cycle
 savip_chain_worker=SavipChainWorker(savip_dossier_provider,savip_chain_provider,on_pass=savip_jev_worker.run_cycle)
 savip_dex_worker=SavipDexWorker(dex_provider,on_enriched=savip_chain_worker.run_cycle)
 savip_market_provider=SavipRiskMarketProvider()
-savip_shadow_entry_worker=SavipShadowEntryWorker(savip_market_provider)
+savip_shadow_entry_worker=SavipShadowEntryWorker(savip_market_provider,seconds=30)
+savip_pick_worker.on_accept=savip_shadow_entry_worker.run_cycle
 savip_shadow_risk_worker=SavipShadowRiskWorker(savip_market_provider)
 scheduler=ShadowScheduler(provider,30)
 outcome_worker=OutcomeWorker(provider)
