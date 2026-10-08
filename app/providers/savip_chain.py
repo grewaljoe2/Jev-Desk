@@ -10,9 +10,13 @@ class SavipChainProvider:
         self._lock=asyncio.Lock()
         self._next_call_at=0.0
         self._cooldown_until=0.0
+    def cooling_down(self):
+        return time.monotonic()<self._cooldown_until
     async def fetch(self,chain,address):
         if chain!="solana":return None
         # A failed RPC must never be interpreted as a clean wallet check.
+        if self.cooling_down():
+            raise RuntimeError("solana_rpc_cooldown_429")
         supply=await self._rpc("getTokenSupply",[address,{"commitment":"confirmed"}])
         largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
         total=int((supply or {}).get("value",{}).get("amount") or 0)
