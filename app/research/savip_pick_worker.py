@@ -2,7 +2,7 @@
 import asyncio
 import os
 from datetime import datetime,timezone
-from app.storage.db import savip_single_eligibility_seen,log_savip_single_eligibility
+from app.storage.db import savip_single_eligibility_seen,log_savip_single_eligibility,claim_savip_single_eligibility,complete_savip_single_eligibility_claim
 from app.research.savip_single_audit import build_single_audit
 from app.storage.db import recent_savip_soft_survivors,log_savip_pick,open_savip_positions,savip_pick_fingerprint_seen
 from app.research.savip_pick import PickResult
@@ -58,13 +58,18 @@ class SavipPickWorker:
             self.state="single_eligibility_disabled";return
         if not self.provider.configured:
             self.state="jev_not_configured";return
+        if not await claim_savip_single_eligibility(event_id,row["token_id"]):
+            self.state="single_already_claimed";return
         try:
             raw=await self.provider.judge_single_eligibility(row["token_id"],result["judgment"],evidence)
             audit=build_single_audit(row,raw["eligibility"],raw.get("model"),raw.get("usage"))
             stored=await log_savip_single_eligibility(audit)
             self.state=("single_eligible_audited" if audit["accepted"] else "single_rejected_audited") if stored else "single_already_judged"
-            # Deliberately no PICK event or on_accept until separate shadow-only bridge is validated.
+            await complete_savip_single_eligibility_claim(event_id,"audited" if stored else "duplicate")
+            # Standalone audit never fabricates a comparative PICK.
         except Exception as e:
+            try:await complete_savip_single_eligibility_claim(event_id,"failed")
+            except Exception:pass
             self.state="single_failed";self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
     async def loop(self):
         while True:
