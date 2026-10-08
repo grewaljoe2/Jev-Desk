@@ -15,6 +15,8 @@ class SavipPickWorker:
         if fp and await savip_pick_fingerprint_seen(fp):
             self.state="already_picked";return
         if not rows:self.state="no_survivors";return
+        # PICK compares multiple survivors; never call model or auto-accept one.
+        if len(rows)==1:self.state="single_survivor_awaiting_independent_eligibility";return
         if not self.provider.configured:self.state="jev_not_configured";return
         candidates=[{"token_id":r["token_id"],"judgment":r["payload_json"].get("result",{}).get("judgment"),"evidence":r["payload_json"].get("evidence")} for r in rows]
         try:
