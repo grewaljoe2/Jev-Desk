@@ -44,3 +44,9 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - PR #201 was verified live on Render at dep-db42kfaj9qps73fubrh0, commit ac56baf2ec6baf03d17e17c673c1552b135878d2. Startup complete and GET / HTTP 200. PR #202 requires separate deploy verification.
 - Both SAVIP_SINGLE_ELIGIBILITY_ENABLED and SAVIP_SINGLE_SHADOW_ENTRY_ENABLED remain default false; no approval to enable paid model calls. No real trading. No genuine standalone shadow BOOK fill verified.
 - NEXT: verify deployment of #202, read-only diagnostics, and Postgres-backed concurrency/transaction integration; preserve multi-PICK and frozen thresholds. Do not claim end-to-end success from mocks.
+
+## 2026-10-08 PR #203
+- PR #203 merged 6b99a5a0c308f87b81fc29b6a9e3658495d8edc5, CI 37861719642 SUCCESS. Comparative BOOK opening now uses same pg_advisory_xact_lock(734101,1) as standalone BOOK and checks any open savip_reference position inside transaction, preventing concurrent cross-token opening by the two routes. Static regression test added; no live DB concurrency test performed.
+- Render read-only SQL tool cannot connect to free Postgres dpg-db2sq2qd0e5s73ea0dd0-a because external IP allowlist is empty. Preserve security; do not open IP access just for inspection.
+- Last verified live Render deployment dep-db42npmb7d7c73a57ej0 at 4c59eab, startup success and GET / 200. #203 deployment needs verification.
+- Both standalone switches remain default OFF, no paid model calls enabled, no real trading. Genuine shadow BOOK fill still unverified.
