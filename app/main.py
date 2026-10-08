@@ -173,6 +173,11 @@ async def savip_shadow_data():
 async def savip_discovery_accounting_data():
     return {"ok":True,"discovery":await savip_discovery_accounting(),"shadow_only":True,"live_execution_enabled":False}
 
+@app.get("/savip-chain-rejection-audit")
+async def savip_chain_rejection_audit_endpoint(hours:int=72):
+    from app.storage.db import savip_chain_rejection_audit
+    return {"ok":True,**(await savip_chain_rejection_audit(hours)),"real_execution_enabled":False}
+
 @app.get("/savip-jev-ready")
 async def savip_jev_ready():
     from app.research.savip_jev_candidate import unjudged_chain_passes
