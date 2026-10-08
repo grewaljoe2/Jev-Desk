@@ -8,7 +8,18 @@ class SavipDexWorker:
         self.provider=provider;self.seconds=seconds;self.on_enriched=on_enriched;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
     async def run_cycle(self):
         self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
-        targets=await savip_dex_targets_72h(25)
+        pool=await savip_dex_targets_72h(100)
+        by_network={}
+        for candidate in pool:
+            by_network.setdefault(candidate["chain"],[]).append(candidate)
+        targets=[]
+        while len(targets)<25 and any(by_network.values()):
+            for network in ("solana","bsc","base","eth"):
+                if by_network.get(network) and len(targets)<25:
+                    targets.append(by_network[network].pop(0))
+            for network in sorted(set(by_network)-{"solana","bsc","base","eth"}):
+                if by_network[network] and len(targets)<25:
+                    targets.append(by_network[network].pop(0))
         # Group exact pool addresses by network. One batch request can replace
         # up to 20 individual public API calls without cross-pair substitution.
         groups={}
