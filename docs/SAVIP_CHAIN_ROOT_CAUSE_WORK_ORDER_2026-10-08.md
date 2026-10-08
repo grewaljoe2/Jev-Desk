@@ -42,3 +42,10 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - ETH 2 TRADE qualified: 2 visible, both already persisted CHAIN in last 24h.
 - This CONFIRMS discovery-window truncation excludes valid TRADE candidates. Snapshot is not a measure of actual attempts, open-position gating, or cooldown effects.
 - **NEXT: Step 2** repair worker candidate selection to include qualified 72h cohort without unbounded provider calls; preserve cap 6 per cycle, cooldowns, 24h dedup, position lock, no gate changes. Test fairness and dedup, then CI/merge/deploy/re-audit. Investigate remaining Solana 10 visible separately after this repair.
+
+## Step 2 deployment and first live check — 2026-10-08
+- PR #185 merge 9e13ef2d09c4a77c85ba57724c50b8ae594d71ea; Render dep-db3vjd67bikc73aih2eg **LIVE** (finished 20:15:44Z). Worker pool now limit=10000; six-per-cycle provider cap, dedup, cooldown, position lock, safety gates unchanged.
+- Postdeploy /savip-chain-rejection-audit?hours=72: BSC top_10 rejects 88 decisions / 29 unique tokens (previous 82 / 23); Solana solana_wallet_check_pending_429 86 attempts / 5 tokens (previous 42 / 5); dossier provider_rate_limited_429 6 attempts / 2 tokens (previous 4 / 2). Rolling historical window, not a clean postdeploy attribution.
+- No Solana CHAIN decisions observed; repeated 429 attempts remain the blocking symptom. ETH chain passes in diagnostics have unclaimed historical events; separate downstream concern.
+- /savip-chain-visibility-audit still **intentionally compares 1000 vs 10000**, so outside_worker_1000 is a legacy counterfactual, NOT the newly deployed worker configuration. Do not misreport it as current exclusions.
+- **Next:** measure postdeploy worker cycles/selected and fresh errors; inspect Solana RPC cooldown and dossier cooldown behavior and why 5 tokens repeat. Before any further provider changes, confirm rate-limit-safe approach; no paid APIs, no safety relaxation. Check DB scan latency under new 10000 worker query.
