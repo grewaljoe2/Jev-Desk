@@ -22,18 +22,18 @@ class SavipShadowEntryWorker:
             await self.run_single_entry();return
         created=row.get("created_at")
         if not created or (datetime.now(timezone.utc)-created.astimezone(timezone.utc)).total_seconds()>900:
-            self.state="stale_pick";return
+            await self.run_single_entry();return
         p=row["payload_json"];evidence=(p.get("evidence") or {})
         pick=(p.get("pick") or {}).get("winner") or {}
         if not pick or pick.get("token_id")!=row["token_id"]:
-            self.state="invalid_pick";return
+            await self.run_single_entry();return
         try:
             decision=PickResult.model_validate(p.get("pick") or {})
             accepted,_=decision.accepted()
         except (ValidationError,ValueError,TypeError):
             accepted=False
         if not accepted:
-            self.state="invalid_pick";return
+            await self.run_single_entry();return
         market=await self.market_provider.observe(row["token_id"]) or {}
         price=market.get("price_usd");liq=market.get("liquidity_usd")
         if not price or not liq:
