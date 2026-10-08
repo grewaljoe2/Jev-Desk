@@ -39,9 +39,9 @@ class BridgeContractTests(unittest.TestCase):
         async def scenario():
             a,b=fixtures()
             market=type("Market",(),{"observe":AsyncMock(return_value={"price_usd":0.02,"liquidity_usd":50000})})()
-            with patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \\
-                 patch("app.research.savip_shadow_lifecycle.savip_jev_event_by_id",new=AsyncMock(return_value=b)), \\
-                 patch("app.research.savip_shadow_lifecycle.open_savip_positions",new=AsyncMock(return_value=[])), \\
+            with patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \
+                 patch("app.research.savip_shadow_lifecycle.savip_jev_event_by_id",new=AsyncMock(return_value=b)), \
+                 patch("app.research.savip_shadow_lifecycle.open_savip_positions",new=AsyncMock(return_value=[])), \
                  patch("app.research.savip_shadow_lifecycle.commit_savip_single_shadow_entry",new=AsyncMock(side_effect=[99,None])) as commit:
                 worker=SavipShadowEntryWorker(market)
                 await worker.run_single_entry()
@@ -57,9 +57,9 @@ class BridgeContractTests(unittest.TestCase):
         async def scenario():
             a,b=fixtures()
             market=type("Market",(),{"observe":AsyncMock()})()
-            with patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \\
-                 patch("app.research.savip_shadow_lifecycle.savip_jev_event_by_id",new=AsyncMock(return_value=b)), \\
-                 patch("app.research.savip_shadow_lifecycle.open_savip_positions",new=AsyncMock(return_value=[{"id":1}])), \\
+            with patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \
+                 patch("app.research.savip_shadow_lifecycle.savip_jev_event_by_id",new=AsyncMock(return_value=b)), \
+                 patch("app.research.savip_shadow_lifecycle.open_savip_positions",new=AsyncMock(return_value=[{"id":1}])), \
                  patch("app.research.savip_shadow_lifecycle.commit_savip_single_shadow_entry",new=AsyncMock()) as commit:
                 worker=SavipShadowEntryWorker(market)
                 await worker.run_single_entry()
