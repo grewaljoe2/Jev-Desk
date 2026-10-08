@@ -51,6 +51,7 @@ class BridgeContractTests(unittest.TestCase):
                 self.assertEqual(args[0:2],(51,TOKEN))
                 self.assertAlmostEqual(args[2],18.0)
                 self.assertLess(args[4]["net_asset_usd"],args[2])
+                self.assertEqual(args[5],1000.0)
                 await worker.run_single_entry()
                 self.assertEqual(worker.state,"single_duplicate_or_held")
         asyncio.run(scenario())
