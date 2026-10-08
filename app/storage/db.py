@@ -88,11 +88,11 @@ async def log_savip_dex(token_id,base_payload,dex):
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
         await db.execute("INSERT INTO events(created_at,event_type,token_id,arm,payload_json) VALUES(NOW(),'SAVIP_DEX',%s,'savip_reference',%s::jsonb)",(token_id,json.dumps(payload,default=str)))
 
-async def savip_candidate_pool(window_minutes=15,limit=200):
+async def savip_candidate_pool(window_minutes=15,limit=1000):
     """Savip FREE CUT from fresh candidates using the freshest already-collected facts.
 
     Candidate membership still comes only from recent DISCOVERY. For each candidate,
-    reuse its newest DISCOVERY or >=15m qualification SNAPSHOT so Savip does not
+    reuse its newest DISCOVERY or qualification SNAPSHOT so Savip does not
     discard a later provider refresh. This adds no network calls and changes no gate.
     """
     if not settings.database_url:return {"scanned":0,"free_cut_survivors":[],"wait_too_young":[],"kills":{},"missing_fields":{}}
