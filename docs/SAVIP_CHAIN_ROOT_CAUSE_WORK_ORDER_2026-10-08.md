@@ -146,3 +146,8 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - PR #196 merged b5bce288; independent TypeSafe provider method available but unwired.
 - PR #197 merged 50674e862d6dda773e0c0bcf50c310ea96e62412, CI 37854397790 SUCCESS. Adds pure `build_single_audit` with verified soft-pass and typed eligibility checks, plus three offline regression tests. Audit builder does not persist events and cannot open BOOK positions; it is NOT end-to-end integration.
 - NEXT: add persistent SAVIP_SINGLE_ELIGIBILITY event storage and dedup keyed to Jev event ID, validate stale/error paths, then integrate worker/provider without bypassing PICK confidence gates; verify real shadow-only lifecycle. No real execution.
+
+## Single-survivor worker cost guard — 2026-10-08
+- PR #198 merged eafc6d1; idempotent Postgres SAVIP_SINGLE_ELIGIBILITY audit storage, CI successful after mock fix.
+- PR #199 merged c15e7fa99372d21f2e8f826556e3e1a004d86b9a; CI 37858232630 SUCCESS. Worker can independently judge verified, fresh single survivors, audit to SAVIP_SINGLE_ELIGIBILITY and deduplicate by Jev event, but **SAVIP_SINGLE_ELIGIBILITY_ENABLED defaults false** and therefore incurs NO additional standalone model calls by default. No SAVIP_PICK event/on_accept is emitted from single path, so no shadow entry.
+- NEXT: develop separately validated shadow-only bridge from eligible standalone audit to existing SIZE/FILLS/BOOK, preserving threshold, source freshness, no-position and dedup constraints; do not enable opt-in API calls without explicit user cost approval. No real trading.
