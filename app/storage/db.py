@@ -614,7 +614,7 @@ async def log_savip_jev(token_id,result,evidence):
     import psycopg
     payload=json.dumps({"result":result,"evidence":evidence},default=str)
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_JEV',%s,'savip_reference',%s::jsonb)",(token_id,payload))
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES('SAVIP_JEV',%s,'savip_reference',%s::jsonb,CURRENT_TIMESTAMP)",(token_id,payload))
         await db.commit()
 
 async def recent_savip_jev_outcomes(limit:int=20):
@@ -676,7 +676,7 @@ async def log_savip_pick(payload:dict):
     if not settings.database_url:return
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json) VALUES('SAVIP_PICK',%s,'savip_reference',%s::jsonb)",(payload.get("token_id"),json.dumps(payload,default=str)));await db.commit()
+        await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES('SAVIP_PICK',%s,'savip_reference',%s::jsonb,CURRENT_TIMESTAMP)",(payload.get("token_id"),json.dumps(payload,default=str)));await db.commit()
 
 async def latest_accepted_savip_pick():
     if not settings.database_url:return None
