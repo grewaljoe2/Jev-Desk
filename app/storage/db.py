@@ -892,3 +892,14 @@ async def savip_chain_rejection_audit(hours:int=72):
             for k,v in row.items():
                 if hasattr(v,"as_tuple"):row[k]=float(v)
     return {"available":True,"hours":hours,"definition":"Persisted CHAIN decisions only; retry/error attempts separately; counts include repeat evaluations","chain_decisions":breakdown,"discovery":discovery,"retry_attempts":retries}
+
+
+async def savip_recent_chain_tokens(hours:int=24):
+    """Restart-safe cooldown for completed CHAIN decisions, not transient RPC failures."""
+    if not settings.database_url:return set()
+    import psycopg
+    async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+        cur=await db.execute("""SELECT DISTINCT token_id FROM events
+          WHERE event_type='SAVIP_CHAIN' AND token_id IS NOT NULL
+            AND created_at>=NOW()-(%s * INTERVAL '1 hour')""",(max(1,min(int(hours),72)),))
+        return {row[0] for row in await cur.fetchall()}
