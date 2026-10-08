@@ -21,4 +21,17 @@ class SingleEligibilityTests(unittest.TestCase):
         self.assertEqual(decide({**GOOD,"size_factor":0},"eth:a","eth:a",E)[1],"zero_size")
     def test_unknown_fields_rejected(self):
         self.assertEqual(decide({**GOOD,"winner":{"token_id":"eth:b"}},"eth:a","eth:a",E)[1],"invalid_judgment")
+    def test_nonfinite_and_boolean_market_evidence(self):
+        for field in ("liquidity_usd", "proposed_ticket_usd"):
+            for bad in (True, False, float("nan"), float("inf"), -float("inf")):
+                evidence={"market":{**E["market"],field:bad},"chain":E["chain"]}
+                with self.subTest(field=field,bad=str(bad)):
+                    self.assertFalse(decide(GOOD,"eth:a","eth:a",evidence)[0])
+    def test_nonfinite_and_boolean_scores(self):
+        for field in ("worth_trading_at_all", "confidence", "size_factor"):
+            for bad in (True, False, float("nan"), float("inf"), -float("inf")):
+                with self.subTest(field=field,bad=str(bad)):
+                    self.assertEqual(decide({**GOOD,field:bad},"eth:a","eth:a",E)[1],"invalid_judgment")
+    def test_blank_token_identity(self):
+        self.assertEqual(decide(GOOD," "," ",E)[1],"identity_mismatch")
 if __name__=="__main__":unittest.main()
