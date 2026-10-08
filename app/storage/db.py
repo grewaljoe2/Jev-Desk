@@ -857,11 +857,11 @@ async def savip_chain_rejection_audit(hours:int=72):
           SELECT token_id,created_at,split_part(token_id,':',1) AS network,
             COALESCE(NULLIF(payload_json->>'chain_reason',''),'unknown') AS reason,
             payload_json->>'chain_pass' AS passed,
-            CASE WHEN (payload_json->>'top_10_percent') ~ '^[0-9]+(\\.[0-9]+)?$'
+            CASE WHEN (payload_json->>'top_10_percent') ~ '^[0-9]+([.][0-9]+)?$'
               THEN (payload_json->>'top_10_percent')::numeric END AS top10,
             CASE WHEN (payload_json->>'holder_count') ~ '^[0-9]+$'
               THEN (payload_json->>'holder_count')::numeric END AS holders,
-            CASE WHEN (payload_json->>'liquidity_usd') ~ '^[0-9]+(\\.[0-9]+)?$'
+            CASE WHEN (payload_json->>'liquidity_usd') ~ '^[0-9]+([.][0-9]+)?$'
               THEN (payload_json->>'liquidity_usd')::numeric END AS liquidity
           FROM events WHERE event_type='SAVIP_CHAIN'
             AND created_at>=NOW()-(%s * INTERVAL '1 hour')
