@@ -1023,13 +1023,13 @@ async def savip_jev_event_by_id(event_id:int):
         row=await cur.fetchone()
         return dict(row) if row else None
 
-async def commit_savip_single_shadow_entry(eligibility_id:int,token_id:str,ticket:float,price:float,fill:dict):
+async def commit_savip_single_shadow_entry(eligibility_id:int,token_id:str,ticket:float,price:float,fill:dict,bank_usd:float=1000.0):
     """Atomic shadow BOOK insert and event, serialized across all Savip entry workers."""
     import math
     if not settings.database_url:raise RuntimeError("postgres_unavailable")
     if type(eligibility_id) is not int or eligibility_id<=0 or not isinstance(token_id,str) or not token_id.strip():
         raise ValueError("invalid_entry_identity")
-    if any(type(v) not in (int,float) or not math.isfinite(v) or v<=0 for v in (ticket,price,fill.get("net_asset_usd"),fill.get("quantity"))):
+    if any(type(v) not in (int,float) or not math.isfinite(v) or v<=0 for v in (ticket,price,bank_usd,fill.get("net_asset_usd"),fill.get("quantity"))):
         raise ValueError("invalid_shadow_fill")
     import psycopg
     async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
@@ -1062,7 +1062,7 @@ async def commit_savip_single_shadow_entry(eligibility_id:int,token_id:str,ticke
         evidence=origin[1]["evidence"]
         social=evidence.get("social") or {}
         market_liquidity=evidence["market"]["liquidity_usd"]
-        if ticket > ticket_usd(1000.0,market_liquidity,parsed.size_factor,missing_x=not bool(social.get("x_observation")))+1e-8:
+        if ticket > ticket_usd(bank_usd,market_liquidity,parsed.size_factor,missing_x=not bool(social.get("x_observation")))+1e-8:
             return None
         cur=await db.execute("""SELECT 1 FROM events WHERE event_type='SAVIP_SHADOW_ENTRY'
           AND payload_json->>'eligibility_event_id'=%s LIMIT 1""",(str(eligibility_id),))
