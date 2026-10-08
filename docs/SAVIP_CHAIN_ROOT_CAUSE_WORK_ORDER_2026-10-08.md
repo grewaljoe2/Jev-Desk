@@ -25,3 +25,10 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - Do not equate historical event coverage with chronological funnel conversion.
 - Do not repeatedly patch without measuring; prefer minimal, independently testable changes.
 - Preserve existing UI work for later, after core shadow pipeline functions.
+
+## Step 1 code-path verification (2026-10-08)
+- Confirmed from main: CHAIN calls savip_candidate_pool(window_minutes=72*60) **without limit override**, so limit=1000; the audit uses 10000. This is a real mismatch, but the count of missed TRADE survivors is **not yet measured**.
+- Confirmed CHAIN sequence: open_savip_positions early return; pool FREE; exact_trade_cut; dossier cooldown early return; in-memory recent-token exclusions; persisted SAVIP_CHAIN 24h exclusions; Solana RPC cooldown exclusion; non-Solana-first sort; cap=6; dossier fetch; Solana wallet RPC; evaluate_chain; persist.
+- Confirmed persistence semantics: successful *and rejected* evaluated CHAIN records are SAVIP_CHAIN; errors are SAVIP_CHAIN_ATTEMPT; a 429 attempt is not a completed CHAIN decision. Persisted dedup checks SAVIP_CHAIN only.
+- Confirmed public RPC's getTokenLargestAccounts yields token accounts, not verified owners. Do not treat an RPC 200 as owner-verification success until semantics are fixed.
+- Next evidence requirement: quantify how many current TRADE survivors lie outside latest 1000 unique discoveries; then measure remaining exclusions and selected/attempted counts. Do not assert the 1000 cap is the dominant cause without this measurement.
