@@ -1,5 +1,8 @@
 """PRICE -> SIZE -> FILLS -> BOOK shadow entry lifecycle. No real order transport."""
 import asyncio
+import math
+from app.research.savip_single_shadow_bridge import authorize_single_shadow
+from app.storage.db import latest_accepted_savip_single_eligibility,savip_jev_event_by_id,commit_savip_single_shadow_entry
 from datetime import datetime, timezone
 from app.storage.db import latest_accepted_savip_pick,savip_pick_already_opened,log_savip_lifecycle,open_savip_positions,latest_savip_risk_price
 from app.research.savip_book import open_book_position,close_book_position
@@ -15,7 +18,8 @@ class SavipShadowEntryWorker:
         if await open_savip_positions():
             self.state="position_held";return
         row=await latest_accepted_savip_pick()
-        if not row or await savip_pick_already_opened(row["id"]):self.state="waiting";return
+        if not row or await savip_pick_already_opened(row["id"]):
+            await self.run_single_entry();return
         created=row.get("created_at")
         if not created or (datetime.now(timezone.utc)-created.astimezone(timezone.utc)).total_seconds()>900:
             self.state="stale_pick";return
@@ -43,6 +47,31 @@ class SavipShadowEntryWorker:
         if not pos:self.state="already_open";return
         await log_savip_lifecycle("SAVIP_SHADOW_ENTRY",row["token_id"],{"pick_event_id":row["id"],"position_id":pos,"price":price,"ticket_usd":ticket,"fill":fill,"real_execution":False})
         self.state="open"
+    async def run_single_entry(self):
+        row=await latest_accepted_savip_single_eligibility()
+        if not row:
+            self.state="waiting";return
+        payload=row.get("payload_json") or {}
+        jev=await savip_jev_event_by_id(payload.get("jev_event_id"))
+        allowed,reason,factor,evidence=authorize_single_shadow(row,jev)
+        if not allowed:
+            self.state="single_blocked_"+reason;return
+        if await open_savip_positions():
+            self.state="position_held";return
+        market=await self.market_provider.observe(row["token_id"]) or {}
+        price=market.get("price_usd")
+        liquidity=market.get("liquidity_usd")
+        if any(type(v) not in (int,float) or not math.isfinite(v) or v<=0 for v in (price,liquidity)):
+            self.state="single_waiting_for_market";return
+        social=evidence.get("social") or {}
+        ticket=ticket_usd(self.bank_usd,liquidity,factor,missing_x=not bool(social.get("x_observation")))
+        if not math.isfinite(ticket) or ticket<=0:
+            self.state="single_no_ticket";return
+        fill=simulated_market_fill(ticket,price)
+        if fill.get("net_asset_usd",0)<=0 or fill.get("quantity",0)<=0:
+            self.state="single_fee_exceeds_ticket";return
+        pos=await commit_savip_single_shadow_entry(row["id"],row["token_id"],ticket,price,fill)
+        self.state="single_open" if pos else "single_duplicate_or_held"
     async def loop(self):
         while True:
             try:await self.run_cycle()
