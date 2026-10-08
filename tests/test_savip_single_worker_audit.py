@@ -34,7 +34,7 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
     async def test_low_confidence_logged_rejected(self):
         p=type("Provider",(),{"configured":True,"judge_single_eligibility":AsyncMock(return_value={"eligibility":{**S,"confidence":0.2}})})()
         w=m.SavipPickWorker(p)
-        with patch.dict("os.environ",{"SAVIP_SINGLE_ELIGIBILITY_ENABLED":"true"}),patch.object(m,"savip_single_eligibility_seen",AsyncMock(return_value=False)),patch.object(m,"log_savip_single_eligibility",AsyncMock(return_value=True)) as log:
+        with patch.dict("os.environ",{"SAVIP_SINGLE_ELIGIBILITY_ENABLED":"true"}),patch.object(m,"savip_single_eligibility_seen",AsyncMock(return_value=False)),patch.object(m,"claim_savip_single_eligibility",AsyncMock(return_value=True)),patch.object(m,"complete_savip_single_eligibility_claim",AsyncMock()),patch.object(m,"log_savip_single_eligibility",AsyncMock(return_value=True)) as log:
             await w.run_single(row())
             self.assertEqual(w.state,"single_rejected_audited")
             self.assertEqual(log.await_args.args[0]["reason"],"confidence")
