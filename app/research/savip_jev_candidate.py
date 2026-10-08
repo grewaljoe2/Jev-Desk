@@ -21,6 +21,11 @@ async def unjudged_chain_passes(limit:int=3):
         cur=await db.execute("""SELECT e.id AS chain_event_id,e.token_id,e.payload_json,e.created_at FROM events e
           LEFT JOIN savip_jev_claims c ON c.chain_event_id=e.id
           WHERE e.event_type='SAVIP_CHAIN' AND e.payload_json->>'chain_pass'='true' AND e.created_at>=NOW()-interval '72 hours' AND c.chain_event_id IS NULL
+            AND NOT EXISTS (SELECT 1 FROM events judged WHERE judged.event_type='SAVIP_JEV'
+              AND judged.token_id=e.token_id AND judged.created_at>=NOW()-interval '72 hours')
+            AND NOT EXISTS (SELECT 1 FROM savip_jev_claims prior
+              WHERE prior.token_id=e.token_id AND prior.status IN ('claimed','unresolved_no_outcome','failed_once')
+                AND prior.claimed_at>=NOW()-interval '72 hours')
             AND NOT EXISTS (SELECT 1 FROM events newer WHERE newer.token_id=e.token_id AND newer.event_type='SAVIP_CHAIN' AND newer.created_at>e.created_at AND newer.payload_json->>'chain_pass'='false')
           ORDER BY e.created_at ASC LIMIT %s""",(limit,))
         return [dict(r) for r in await cur.fetchall()]
