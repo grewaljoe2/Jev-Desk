@@ -3,7 +3,7 @@ import asyncio
 import time
 from datetime import datetime, timezone
 from app.research.savip_trade_cut import exact_trade_cut
-from app.storage.db import savip_candidate_pool,open_savip_positions
+from app.storage.db import savip_candidate_pool,open_savip_positions, savip_recent_chain_tokens
 from app.research.savip_chain_cut import evaluate_chain
 from app.core.config import settings
 
@@ -30,7 +30,8 @@ class SavipChainWorker:
             self.last_error="dossier_provider_cooldown";return
         now=time.monotonic()
         self._recent_tokens={k:v for k,v in self._recent_tokens.items() if v>now}
-        fresh=[row for row in trade["survivors"] if row["token_id"] not in self._recent_tokens]
+        persisted_recent=await savip_recent_chain_tokens(hours=24)
+        fresh=[row for row in trade["survivors"] if row["token_id"] not in self._recent_tokens and row["token_id"] not in persisted_recent]
         # Prioritize freshest qualified pools within the existing shared GT pacing budget.
         fresh.sort(key=lambda row: (float(row.get("age_minutes") or 1e12),row.get("token_id") or ""))
         eligible=[row for row in fresh if row.get("chain")!="solana" or not self.sol_chain.cooling_down()]
@@ -80,6 +81,7 @@ class SavipChainWorker:
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+                await self._record_attempt(row.get("token_id"),self.last_error)
                 self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) else "error","reason":self.last_error})
                 if "429" not in str(e):
                     self._recent_tokens[row["token_id"]]=time.monotonic()+120.0
@@ -91,6 +93,16 @@ class SavipChainWorker:
                     # dossier requests while its global 429 cooldown runs.
                     self._next_dossier_retry_at=time.monotonic()+120.0
                     break
+    async def _record_attempt(self,token_id,reason):
+        if not settings.database_url or not token_id:return
+        try:
+            import psycopg,json
+            async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
+                await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES(%s,%s,%s,%s::jsonb,CURRENT_TIMESTAMP)",("SAVIP_CHAIN_ATTEMPT",token_id,"savip_reference",json.dumps({"reason":reason[:200]})))
+                await db.commit()
+        except Exception:
+            pass
+
     async def _persist(self,token_id,d,ok,reason):
         if not settings.database_url:return
         import psycopg,json
