@@ -29,3 +29,23 @@ class OwnerCoverageTests(unittest.TestCase):
 
     def test_incomplete_even_when_sum_matches_supply(self):
         self.assertEqual(check([{"owner":"A","amount":1000}],1000,complete=False)[0],"reject")
+
+    def test_mint_mismatch_fail_closed(self):
+        rows=[{"account":str(i),"owner":str(i),"amount":50,"mint":"wrong","program":"token","slot":42} for i in range(20)]
+        self.assertEqual(check(rows,1000,complete=True,expected_mint="expected",expected_program="token",expected_slot=42)[0],"unverified")
+
+    def test_duplicate_token_account_fail_closed(self):
+        rows=[{"account":"same","owner":str(i),"amount":50,"mint":"mint","program":"token","slot":42} for i in range(20)]
+        self.assertEqual(check(rows,1000,complete=True,expected_mint="mint",expected_program="token",expected_slot=42)[0],"unverified")
+
+    def test_snapshot_slot_mismatch_fail_closed(self):
+        rows=[{"account":str(i),"owner":str(i),"amount":50,"mint":"mint","program":"token","slot":42 if i else 41} for i in range(20)]
+        self.assertEqual(check(rows,1000,complete=True,expected_mint="mint",expected_program="token",expected_slot=42)[0],"unverified")
+
+    def test_token_program_mismatch_fail_closed(self):
+        rows=[{"account":str(i),"owner":str(i),"amount":50,"mint":"mint","program":"token2022","slot":42} for i in range(20)]
+        self.assertEqual(check(rows,1000,complete=True,expected_mint="mint",expected_program="token",expected_slot=42)[0],"unverified")
+
+    def test_consistent_attested_rows_pass(self):
+        rows=[{"account":str(i),"owner":str(i),"amount":50,"mint":"mint","program":"token2022","slot":42} for i in range(20)]
+        self.assertEqual(check(rows,1000,complete=True,expected_mint="mint",expected_program="token2022",expected_slot=42)[0],"pass")
