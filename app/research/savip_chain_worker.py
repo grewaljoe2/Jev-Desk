@@ -34,7 +34,6 @@ class SavipChainWorker:
         # Prioritize freshest qualified pools within the existing shared GT pacing budget.
         fresh.sort(key=lambda row: (float(row.get("age_minutes") or 1e12),row.get("token_id") or ""))
         for row in fresh[:self.cap]:
-            self._recent_tokens[row["token_id"]]=now+900.0
             self.last_checked+=1
             try:
                 # Token IDs are canonical chain:address; the FREE/TRADE SQL projection
@@ -54,15 +53,18 @@ class SavipChainWorker:
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing,"top_10_percent":d.get("top_10_percent"),"holder_count":d.get("holder_count"),"top_wallet_percent":d.get("top_wallet_percent"),"top_10_limit_percent":60.0,"dossier_source":d.get("source")})
+                self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
                 if ok:
                     self.last_passed+=1
                     if self.on_pass:await self.on_pass()
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
-                self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"error","reason":self.last_error})
+                self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) else "error","reason":self.last_error})
+                if "429" not in str(e):
+                    self._recent_tokens[row["token_id"]]=time.monotonic()+120.0
                 if "solana_rpc_rate_limited_429" in str(e) or "solana_rpc_cooldown_429" in str(e):
-                    # Keep processing other chains; Solana RPC is cooling down.
+                    # Avoid exhausting a cooling Solana RPC; other chains remain eligible.
                     continue
                 if "provider_rate_limited_429" in str(e):
                     # GeckoTerminal is shared with discovery; avoid repeated
