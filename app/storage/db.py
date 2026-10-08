@@ -905,6 +905,29 @@ async def savip_recent_chain_tokens(hours:int=24):
         return {row[0] for row in await cur.fetchall()}
 
 
+async def savip_chain_visibility_audit(hours:int=72):
+    """Read-only CHAIN worker input comparison; no provider calls."""
+    if not settings.database_url:return {"available":False,"reason":"postgres_unavailable"}
+    from collections import Counter
+    from app.research.savip_trade_cut import exact_trade_cut
+    hours=max(1,min(int(hours),72))
+    full=await savip_candidate_pool(window_minutes=hours*60,limit=10000)
+    worker=await savip_candidate_pool(window_minutes=hours*60,limit=1000)
+    full_trade=(await exact_trade_cut(full["free_cut_survivors"]))["survivors"]
+    worker_trade=(await exact_trade_cut(worker["free_cut_survivors"]))["survivors"]
+    visible={r["token_id"] for r in worker_trade}
+    recent=await savip_recent_chain_tokens(hours=24)
+    counts={}
+    for row in full_trade:
+        chain=row.get("chain") or "unknown"
+        c=counts.setdefault(chain,Counter())
+        c["trade_qualified"]+=1
+        if row["token_id"] not in visible:c["outside_worker_1000"]+=1
+        elif row["token_id"] in recent:c["persisted_chain_24h"]+=1
+        else:c["worker_visible_without_persisted_chain"]+=1
+    return {"available":True,"hours":hours,"full_scanned":full["scanned"],"worker_scanned":worker["scanned"],"full_sample_cap":10000,"worker_sample_cap":1000,"networks":[{"network":k,**dict(v)} for k,v in sorted(counts.items())],"definition":"Snapshot comparison of exact TRADE-qualified tokens in audit 10000 vs worker 1000, plus persisted CHAIN decisions in last 24h. Does not model in-memory cooldown, active position, RPC cooldown, or cycle selection; counts are not actual attempts."}
+
+
 async def savip_prechain_network_funnel(hours:int=72):
     """Read-only distinct-token coverage before CHAIN; no provider requests."""
     if not settings.database_url:return {"available":False,"reason":"postgres_unavailable"}

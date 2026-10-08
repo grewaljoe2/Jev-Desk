@@ -110,6 +110,13 @@ async def qualification_data():
 
 
 
+@app.get("/savip-chain-visibility-audit")
+async def savip_chain_visibility_endpoint(hours:int=72):
+    from app.storage.db import savip_chain_visibility_audit
+    result=await savip_chain_visibility_audit(hours)
+    return {"ok":True,**result,"real_execution_enabled":False}
+
+
 @app.get("/savip-pipeline-diagnostics")
 async def savip_pipeline_diagnostics():
     """Small read-only status endpoint: actual worker states, persisted outcomes, and pending queue."""
