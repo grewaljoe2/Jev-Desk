@@ -84,3 +84,9 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - Drafted docs/SOLANA_OWNER_COMPLETE_COLLECTOR_FEASIBILITY_2026-10-08.md (research only). Separates token-program ownership from token-account authority, warns standard getProgramAccounts lacks pagination and minContextSlot is NOT a snapshot pin, and identifies Token-2022 extensions/withheld fees and LP ambiguity.
 - No new provider selected or paid. Public RPC has observed 429s; no large scans authorized. Existing 14 verifier tests do not validate collector completeness.
 - NEXT: verify provider free-tier and consistent snapshot feasibility; build MOCK collector adapter with 429/partial/duplicate/slot/Token-2022 cases before any production wiring. Keep Solana fail-closed, continue separate downstream pipeline diagnosis.
+
+## Mock Solana collector verified — 2026-10-08
+- PR #189 documentation merged as 6f3a7927ed923bae0773f92b5e03c7c00a3b3451 after workflow SUCCESS.
+- PR #190 mock collector merged as 4f0914aa7c98c850c9c00cdac8ad7cdc4f4f4be6. GitHub Actions run 37845081887 SUCCESS; job logs explicitly show **10 mock collector tests OK**. Separate 14 owner verification tests also remain in CI. No production integration.
+- Mock tests cover complete pages, missing/duplicate pages, duplicate accounts, slot inconsistency, rate limit, truncated response, wrong program, unknown owner, and incomplete attestation. Mock 'complete=True' is still caller-provided, NOT independent proof of real provider completeness.
+- NEXT: evaluate whether existing no-cost RPC/provider offers bounded complete mint-account enumeration and consistent snapshots. If infeasible, preserve Solana fail-closed and shift attention to non-Solana CHAIN->Jev->shadow pipeline evidence instead of endlessly adding synthetic tests. Do not buy APIs or relax gates.
