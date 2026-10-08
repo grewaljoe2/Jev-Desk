@@ -795,3 +795,21 @@ async def recent_savip_chain_decisions(limit=50):
           ORDER BY created_at DESC LIMIT %s""",(limit,))
         rows=await cur.fetchall()
     return [{**dict(row),"created_at":row["created_at"].isoformat()} for row in rows]
+
+async def savip_chain_jev_claim_audit(limit:int=100):
+    """Read-only latest CHAIN passes joined to claims and their persisted Jev outcomes."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT e.id AS chain_event_id,e.token_id,e.created_at AS chain_at,
+            c.status AS claim_status,c.claimed_at,c.completed_at,
+            (SELECT j.created_at FROM events j
+             WHERE j.event_type='SAVIP_JEV' AND j.token_id=e.token_id
+               AND j.created_at>=e.created_at ORDER BY j.created_at ASC LIMIT 1) AS jev_at
+          FROM events e LEFT JOIN savip_jev_claims c ON c.chain_event_id=e.id
+          WHERE e.event_type='SAVIP_CHAIN' AND e.payload_json->>'chain_pass'='true'
+            AND e.created_at>=NOW()-interval '72 hours'
+          ORDER BY e.created_at DESC LIMIT %s""",(max(1,min(limit,200)),))
+        rows=await cur.fetchall()
+    return [{k:(v.isoformat() if hasattr(v,"isoformat") else v) for k,v in dict(row).items()} for row in rows]
