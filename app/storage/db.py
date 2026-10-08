@@ -1058,7 +1058,7 @@ async def commit_savip_single_shadow_entry(eligibility_id:int,token_id:str,ticke
             return None
         accepted,reason,parsed=decide_single_eligibility(source_payload.get("eligibility"),token_id,origin[0],origin[1].get("evidence"))
         if not accepted or source_payload.get("reason")!="pass":return None
-        from app.research.savip_shadow_execution import ticket_usd,simulated_market_fill
+        from app.research.savip_shadow_execution import ticket_usd
         evidence=origin[1]["evidence"]
         social=evidence.get("social") or {}
         market_liquidity=evidence["market"]["liquidity_usd"]
