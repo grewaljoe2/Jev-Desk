@@ -114,9 +114,11 @@ async def savip_pipeline_diagnostics():
     """Small read-only status endpoint: actual worker states, persisted outcomes, and pending queue."""
     from app.research.savip_jev_candidate import unjudged_chain_passes
     from app.storage.db import recent_savip_jev_outcomes
+    from app.storage.db import savip_chain_jev_claim_audit
     return {
         "ok": True,
-        "shadow_only": True,
+        "shadow_only": True,        "chain_pass_claim_audit": await savip_chain_jev_claim_audit(100),
+
         "real_execution_enabled": False,
         "chain": {
             "checked_last_cycle": savip_chain_worker.last_checked,
