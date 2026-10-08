@@ -903,3 +903,31 @@ async def savip_recent_chain_tokens(hours:int=24):
           WHERE event_type='SAVIP_CHAIN' AND token_id IS NOT NULL
             AND created_at>=NOW()-(%s * INTERVAL '1 hour')""",(max(1,min(int(hours),72)),))
         return {row[0] for row in await cur.fetchall()}
+
+
+async def savip_prechain_network_funnel(hours:int=72):
+    """Read-only distinct-token coverage before CHAIN; no provider requests."""
+    if not settings.database_url:return {"available":False,"reason":"postgres_unavailable"}
+    hours=max(1,min(int(hours),24*30))
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""WITH recent AS (
+          SELECT DISTINCT token_id,split_part(token_id,':',1) AS network
+          FROM events WHERE event_type='DISCOVERY' AND token_id IS NOT NULL
+            AND created_at>=NOW()-(%s * INTERVAL '1 hour')
+        ), coverage AS (
+          SELECT r.network,r.token_id,
+            EXISTS(SELECT 1 FROM events e WHERE e.token_id=r.token_id AND e.event_type='SAVIP_DEX') AS has_dex,
+            EXISTS(SELECT 1 FROM events e WHERE e.token_id=r.token_id AND e.event_type='SAVIP_CHAIN') AS has_chain,
+            EXISTS(SELECT 1 FROM events e WHERE e.token_id=r.token_id AND e.event_type='SAVIP_CHAIN_ATTEMPT') AS has_chain_error,
+            EXISTS(SELECT 1 FROM events e WHERE e.token_id=r.token_id AND e.event_type='SAVIP_JEV') AS has_jev
+          FROM recent r
+        ) SELECT network,COUNT(*) AS discovered_unique,
+          COUNT(*) FILTER(WHERE has_dex) AS dex_observed_unique,
+          COUNT(*) FILTER(WHERE has_chain) AS chain_decided_unique,
+          COUNT(*) FILTER(WHERE has_chain_error) AS chain_error_unique,
+          COUNT(*) FILTER(WHERE has_jev) AS jev_observed_unique
+        FROM coverage GROUP BY network ORDER BY discovered_unique DESC""",(hours,))
+        rows=[dict(row) for row in await cur.fetchall()]
+    return {"available":True,"hours":hours,"definition":"Unique tokens discovered in window; downstream flags indicate ANY historical event for token, not necessarily within the window or proof of passing prior gates","networks":rows}
