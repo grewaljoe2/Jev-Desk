@@ -930,4 +930,17 @@ async def savip_prechain_network_funnel(hours:int=72):
           COUNT(*) FILTER(WHERE has_jev) AS jev_observed_unique
         FROM coverage GROUP BY network ORDER BY discovered_unique DESC""",(hours,))
         rows=[dict(row) for row in await cur.fetchall()]
-    return {"available":True,"hours":hours,"definition":"Unique tokens discovered in window; downstream flags indicate ANY historical event for token, not necessarily within the window or proof of passing prior gates","networks":rows}
+    # Additional stage accounting reuses the same 72h discovery cohort and
+    # FREE/TRADE source facts. No external requests or gate changes.
+    from app.research.savip_trade_cut import exact_trade_cut
+    pool=await savip_candidate_pool(window_minutes=hours*60,limit=100000)
+    free=pool["free_cut_survivors"]
+    trade=await exact_trade_cut(free)
+    from collections import Counter
+    free_counts=Counter(r.get("chain") for r in free)
+    trade_counts=Counter(r.get("chain") for r in trade["survivors"])
+    for row in rows:
+        net=row["network"]
+        row["free_qualified_in_sample"]=free_counts[net]
+        row["trade_qualified_in_sample"]=trade_counts[net]
+    return {"available":True,"hours":hours,"definition":"Unique discoveries in window; downstream flags indicate ANY historical event. FREE/TRADE counts are current qualification among up to 100000 recent tokens, not historical admission events.","networks":rows,"free_trade_sample_scanned":pool["scanned"],"free_trade_sample_cap":100000,"free_cut_rejections":pool["kills"],"trade_cut_rejections":trade["kills"],"trade_missing_fields":trade["missing_fields"]}
