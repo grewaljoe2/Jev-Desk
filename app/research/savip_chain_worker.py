@@ -8,7 +8,7 @@ from app.research.savip_chain_cut import evaluate_chain
 from app.core.config import settings
 
 class SavipChainWorker:
-    def __init__(self,dossier,sol_chain,seconds=900,cap=3,on_pass=None):
+    def __init__(self,dossier,sol_chain,seconds=60,cap=6,on_pass=None):
         self.dossier=dossier;self.sol_chain=sol_chain;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.task=None
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock();self._next_dossier_retry_at=0.0;self.cycle_started_at=None;self.cycle_finished_at=None;self.cycle_running=False;self.last_candidate_results=[];self._recent_tokens={}
     async def run_cycle(self):
@@ -31,6 +31,8 @@ class SavipChainWorker:
         now=time.monotonic()
         self._recent_tokens={k:v for k,v in self._recent_tokens.items() if v>now}
         fresh=[row for row in trade["survivors"] if row["token_id"] not in self._recent_tokens]
+        # Prioritize freshest qualified pools within the existing shared GT pacing budget.
+        fresh.sort(key=lambda row: (float(row.get("age_minutes") or 1e12),row.get("token_id") or ""))
         for row in fresh[:self.cap]:
             self._recent_tokens[row["token_id"]]=now+900.0
             self.last_checked+=1
