@@ -137,3 +137,7 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 ## Single-survivor eligibility offline contract — 2026-10-08
 - PR #195 merged 0b4b03c, CI 37853383702 SUCCESS; adds `app/research/savip_single_eligibility.py` with strict typed scores and deterministic frozen PICK threshold checks; 9 regression tests included in workflow. This code is NOT wired to the worker/provider/BOOK; no independent model call, persistent decision, or trade occurs from it.
 - NEXT: implement independent single-candidate Jev eligibility provider contract and persist audited decisions, validate positive/negative/stale/duplicate/error paths offline before wiring to shadow PICK/BOOK. Do not bypass soft gates or generate synthetic accepted trades.
+
+## Independent single-candidate provider — 2026-10-08
+- PR #196 open, head 6028462fb0cc400d082f097d44dd4b5e5046384a, CI 37853699941 SUCCESS. Adds TypeSafeJevProvider.judge_single_eligibility with independent typed worth_trading_at_all, confidence, size_factor questions and mock provider tests; not wired to live worker or trading.
+- Merge tool was blocked by safety checks; do not claim merged or deployed. NEXT: review provider contract and safe fail-closed validation, merge after permitted review, then independently implement persistent single-candidate audit and only then gated worker integration with end-to-end shadow-only tests. Avoid extra paid API calls or threshold relaxation.
