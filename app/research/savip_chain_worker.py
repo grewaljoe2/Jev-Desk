@@ -33,7 +33,10 @@ class SavipChainWorker:
         fresh=[row for row in trade["survivors"] if row["token_id"] not in self._recent_tokens]
         # Prioritize freshest qualified pools within the existing shared GT pacing budget.
         fresh.sort(key=lambda row: (float(row.get("age_minutes") or 1e12),row.get("token_id") or ""))
-        for row in fresh[:self.cap]:
+        eligible=[row for row in fresh if row.get("chain")!="solana" or not self.sol_chain.cooling_down()]
+        for row in eligible[:self.cap]:
+            if row.get("chain")=="solana" and self.sol_chain.cooling_down():
+                continue
             self.last_checked+=1
             try:
                 # Token IDs are canonical chain:address; the FREE/TRADE SQL projection
@@ -46,10 +49,19 @@ class SavipChainWorker:
                 if not d: raise RuntimeError("missing_dossier")
                 d={**row,**d}
                 if row["chain"]=="solana":
-                    sf=await self.sol_chain.fetch("solana",address)
-                    if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
+                    try:
+                        sf=await self.sol_chain.fetch("solana",address)
+                        if sf:d["top_wallet_percent"]=sf.get("top_wallet_fraction")
+                    except RuntimeError as rpc_error:
+                        if "solana_rpc_" not in str(rpc_error):raise
+                        # The GT dossier is still valid; do not claim the wallet check passed.
+                        d["top_wallet_percent"]=None
+                        d["solana_wallet_rpc_status"]="unavailable_rate_limited"
+                        d["solana_wallet_rpc_error"]=str(rpc_error)
                 missing=[key for key in ("holder_count","top_wallet_percent","top_10_percent","is_honeypot","mint_authority","freeze_authority") if d.get(key) is None]
                 d["missing_chain_fields"]=missing
+                if d.get("solana_wallet_rpc_status")=="unavailable_rate_limited":
+                    raise RuntimeError("solana_wallet_check_pending_429")
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing,"top_10_percent":d.get("top_10_percent"),"holder_count":d.get("holder_count"),"top_wallet_percent":d.get("top_wallet_percent"),"top_10_limit_percent":60.0,"dossier_source":d.get("source")})
