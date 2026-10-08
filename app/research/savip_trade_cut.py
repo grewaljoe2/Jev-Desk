@@ -33,5 +33,7 @@ async def exact_trade_cut(free_survivors):
         elif sh==0 and bh>20:
             kills["no_sells"]=kills.get("no_sells",0)+1
         else:
-            survivors.append({**row,**x,"momentum_m5":{"buys":x.get("buys_m5"),"sells":x.get("sells_m5"),"trades":x.get("trades_m5"),"volume_usd":x.get("volume_m5_usd"),"price_change_pct":x.get("price_change_m5_pct"),"observation_only":True}})
+            # DEX trade telemetry must never overwrite FREE CUT gated age, liquidity, volume or market cap.
+            # Keep the exact source facts used to admit the token and attach DEX facts separately.
+            survivors.append({**row,"dex_trade_facts":x,"momentum_m5":{"buys":x.get("buys_m5"),"sells":x.get("sells_m5"),"trades":x.get("trades_m5"),"volume_usd":x.get("volume_m5_usd"),"price_change_pct":x.get("price_change_m5_pct"),"observation_only":True}})
     return {"survivors":survivors,"kills":kills,"missing_fields":missing}
