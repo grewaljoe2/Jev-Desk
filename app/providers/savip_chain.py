@@ -20,8 +20,30 @@ class SavipChainProvider:
         supply=await self._rpc("getTokenSupply",[address,{"commitment":"confirmed"}])
         largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
         total=int((supply or {}).get("value",{}).get("amount") or 0)
-        vals=(largest or {}).get("value") or [];amounts=[int(x.get("amount") or 0) for x in vals]
-        return {"top_wallet_fraction":amounts[0]/total if total and amounts else None,"source":"solana_rpc"}
+        vals=(largest or {}).get("value") or []
+        if total<=0 or not vals:
+            raise RuntimeError("solana_rpc_unverified_supply_or_accounts")
+        # Resolve owners for the largest token accounts. This remains a lower
+        # bound on owner concentration because an owner may have other accounts.
+        accounts=[x.get("address") for x in vals if x.get("address")]
+        if len(accounts)!=len(vals):
+            raise RuntimeError("solana_rpc_missing_token_account")
+        details=await self._rpc("getMultipleAccounts",[accounts,{"encoding":"jsonParsed","commitment":"confirmed"}])
+        info=(details or {}).get("value") or []
+        if len(info)!=len(accounts):
+            raise RuntimeError("solana_rpc_account_lookup_incomplete")
+        owners={}
+        for item,entry in zip(info,vals):
+            parsed=(((item or {}).get("data") or {}).get("parsed") or {})
+            details_info=parsed.get("info") or {}
+            owner=details_info.get("owner")
+            amount=details_info.get("tokenAmount") or {}
+            if not owner or str(amount.get("amount"))!=str(entry.get("amount")):
+                raise RuntimeError("solana_rpc_owner_unverified")
+            owners[owner]=owners.get(owner,0)+int(entry["amount"])
+        # No full-owner coverage from largest-account sampling: do not report
+        # a verified top-wallet fraction or allow CHAIN approval from it.
+        return {"top_wallet_fraction":None,"largest_sampled_owner_fraction":max(owners.values())/total,"sampled_token_accounts":len(accounts),"owner_coverage_complete":False,"source":"solana_rpc_owner_sample"}
     async def _rpc(self,method,params):
         async with self._lock:
             now=time.monotonic()
