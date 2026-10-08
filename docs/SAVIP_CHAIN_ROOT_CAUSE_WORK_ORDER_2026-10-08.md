@@ -151,3 +151,8 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 - PR #198 merged eafc6d1; idempotent Postgres SAVIP_SINGLE_ELIGIBILITY audit storage, CI successful after mock fix.
 - PR #199 merged c15e7fa99372d21f2e8f826556e3e1a004d86b9a; CI 37858232630 SUCCESS. Worker can independently judge verified, fresh single survivors, audit to SAVIP_SINGLE_ELIGIBILITY and deduplicate by Jev event, but **SAVIP_SINGLE_ELIGIBILITY_ENABLED defaults false** and therefore incurs NO additional standalone model calls by default. No SAVIP_PICK event/on_accept is emitted from single path, so no shadow entry.
 - NEXT: develop separately validated shadow-only bridge from eligible standalone audit to existing SIZE/FILLS/BOOK, preserving threshold, source freshness, no-position and dedup constraints; do not enable opt-in API calls without explicit user cost approval. No real trading.
+
+## 2026-10-08 final session update
+- PR #196 merged b5bce288 (independent Jev provider); PR #197 merged 50674e86 (typed audit builder); PR #198 merged eafc6d1d (idempotent SAVIP_SINGLE_ELIGIBILITY storage); PR #199 merged c15e7fa9 (worker wiring default OFF). PR #199 CI 37858232630 SUCCESS.
+- Single eligibility calls require SAVIP_SINGLE_ELIGIBILITY_ENABLED=true; default false avoids new API costs. Single accepted decisions remain audit-only, never a comparative PICK or shadow entry. No genuine shadow fill verified.
+- Exact continuation and prompt: docs/SAVIP_HANDOFF_2026-10-08_LATEST.md. Next: harden nonfinite evidence/scores, build and test separate single-eligibility shadow BOOK bridge, verify Render deployment/read-only diagnostics. No real execution.
