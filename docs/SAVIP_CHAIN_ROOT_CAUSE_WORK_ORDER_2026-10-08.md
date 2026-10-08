@@ -141,3 +141,8 @@ Status: investigation; no CHAIN fix merged. Authoritative production audit: PR #
 ## Independent single-candidate provider — 2026-10-08
 - PR #196 open, head 6028462fb0cc400d082f097d44dd4b5e5046384a, CI 37853699941 SUCCESS. Adds TypeSafeJevProvider.judge_single_eligibility with independent typed worth_trading_at_all, confidence, size_factor questions and mock provider tests; not wired to live worker or trading.
 - Merge tool was blocked by safety checks; do not claim merged or deployed. NEXT: review provider contract and safe fail-closed validation, merge after permitted review, then independently implement persistent single-candidate audit and only then gated worker integration with end-to-end shadow-only tests. Avoid extra paid API calls or threshold relaxation.
+
+## Standalone eligibility audit builder — 2026-10-08
+- PR #196 merged b5bce288; independent TypeSafe provider method available but unwired.
+- PR #197 merged 50674e862d6dda773e0c0bcf50c310ea96e62412, CI 37854397790 SUCCESS. Adds pure `build_single_audit` with verified soft-pass and typed eligibility checks, plus three offline regression tests. Audit builder does not persist events and cannot open BOOK positions; it is NOT end-to-end integration.
+- NEXT: add persistent SAVIP_SINGLE_ELIGIBILITY event storage and dedup keyed to Jev event ID, validate stale/error paths, then integrate worker/provider without bypassing PICK confidence gates; verify real shadow-only lifecycle. No real execution.
