@@ -29,7 +29,7 @@ def authorize_single_shadow(row, jev_row, now=None):
         return False, "unverified_soft_pass", 0, None
     if p.get("decision_type") != "standalone_eligibility" or p.get("shadow_only") is not True or p.get("accepted") is not True:
         return False, "not_accepted", 0, None
-    evidence = j.get("evidence")
+    evidence = jev_row.get("payload_json", {}).get("evidence")
     allowed, reason, parsed = decide_single_eligibility(p.get("eligibility"), token, jev_row.get("token_id"), evidence)
     if not allowed or p.get("reason") != "pass":
         return False, reason if not allowed else "reason_mismatch", 0, None
