@@ -55,6 +55,14 @@ class BridgeContractTests(unittest.TestCase):
                 await worker.run_single_entry()
                 self.assertEqual(worker.state,"single_duplicate_or_held")
         asyncio.run(scenario())
+    def test_default_disabled_never_reads_source(self):
+        async def scenario():
+            with patch.dict("os.environ",{"SAVIP_SINGLE_SHADOW_ENTRY_ENABLED":"false"}), patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock()) as read:
+                worker=SavipShadowEntryWorker(None)
+                await worker.run_single_entry()
+                self.assertEqual(worker.state,"single_entry_disabled")
+                read.assert_not_awaited()
+        asyncio.run(scenario())
     def test_held_position_never_commits(self):
         async def scenario():
             a,b=fixtures()
