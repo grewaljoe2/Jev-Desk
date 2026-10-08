@@ -1,5 +1,8 @@
 """Savip cross-candidate PICK worker. Shadow only; no order transport."""
 import asyncio
+from datetime import datetime,timezone
+from app.storage.db import savip_single_eligibility_seen,log_savip_single_eligibility
+from app.research.savip_single_audit import build_single_audit
 from app.storage.db import recent_savip_soft_survivors,log_savip_pick,open_savip_positions,savip_pick_fingerprint_seen
 from app.research.savip_pick import PickResult
 
@@ -16,7 +19,8 @@ class SavipPickWorker:
             self.state="already_picked";return
         if not rows:self.state="no_survivors";return
         # PICK compares multiple survivors; never call model or auto-accept one.
-        if len(rows)==1:self.state="single_survivor_awaiting_independent_eligibility";return
+        if len(rows)==1:
+            await self.run_single(rows[0]);return
         if not self.provider.configured:self.state="jev_not_configured";return
         candidates=[{"token_id":r["token_id"],"judgment":r["payload_json"].get("result",{}).get("judgment"),"evidence":r["payload_json"].get("evidence")} for r in rows]
         try:
@@ -33,6 +37,32 @@ class SavipPickWorker:
             if accepted and self.on_accept:await self.on_accept()
         except Exception as e:
             self.state="failed";self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+    async def run_single(self,row):
+        """Standalone eligibility audit; does not convert a single survivor into a PICK winner."""
+        event_id=row.get("id")
+        created=row.get("created_at")
+        if not isinstance(event_id,int) or event_id<=0 or not isinstance(created,datetime):
+            self.state="single_invalid_source";return
+        age=(datetime.now(timezone.utc)-created.astimezone(timezone.utc)).total_seconds()
+        if age<0 or age>900:
+            self.state="single_stale_source";return
+        if await savip_single_eligibility_seen(event_id):
+            self.state="single_already_judged";return
+        payload=row.get("payload_json") or {}
+        result=payload.get("result") or {}
+        evidence=payload.get("evidence")
+        if result.get("ok") is not True or result.get("soft_pass") is not True or not isinstance(result.get("judgment"),dict) or not isinstance(evidence,dict):
+            self.state="single_invalid_evidence";return
+        if not self.provider.configured:
+            self.state="jev_not_configured";return
+        try:
+            raw=await self.provider.judge_single_eligibility(row["token_id"],result["judgment"],evidence)
+            audit=build_single_audit(row,raw["eligibility"],raw.get("model"),raw.get("usage"))
+            stored=await log_savip_single_eligibility(audit)
+            self.state=("single_eligible_audited" if audit["accepted"] else "single_rejected_audited") if stored else "single_already_judged"
+            # Deliberately no PICK event or on_accept until separate shadow-only bridge is validated.
+        except Exception as e:
+            self.state="single_failed";self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
     async def loop(self):
         while True:
             try:await self.run_cycle()
