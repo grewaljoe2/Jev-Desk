@@ -777,3 +777,21 @@ async def savip_discovery_accounting():
     totals["available"]=True
     totals["scanned_metric_definition"]="most_recent_200_unique_discovered_tokens_in_72h"
     return totals
+
+
+async def recent_savip_chain_decisions(limit=50):
+    """Persisted CHAIN decisions, newest first; excludes transient RPC retries."""
+    if not settings.database_url:return []
+    import psycopg
+    from psycopg.rows import dict_row
+    async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
+        cur=await db.execute("""SELECT token_id,created_at,
+          payload_json->>'chain_reason' AS reason,
+          payload_json->>'chain_pass' AS passed,
+          payload_json->>'top_10_percent' AS top_10_percent,
+          payload_json->>'holder_count' AS holder_count,
+          payload_json->>'top_wallet_percent' AS top_wallet_percent
+          FROM events WHERE event_type='SAVIP_CHAIN'
+          ORDER BY created_at DESC LIMIT %s""",(limit,))
+        rows=await cur.fetchall()
+    return [{**dict(row),"created_at":row["created_at"].isoformat()} for row in rows]
