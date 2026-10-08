@@ -34,6 +34,9 @@ class SavipChainWorker:
         # Prioritize freshest qualified pools within the existing shared GT pacing budget.
         fresh.sort(key=lambda row: (float(row.get("age_minutes") or 1e12),row.get("token_id") or ""))
         eligible=[row for row in fresh if row.get("chain")!="solana" or not self.sol_chain.cooling_down()]
+        # Favor checks that do not depend on the constrained public Solana RPC.
+        # Retain youngest-first priority within each network group.
+        eligible.sort(key=lambda row: (row.get("chain")=="solana", float(row.get("age_minutes") or 1e12), row.get("token_id") or ""))
         for row in eligible[:self.cap]:
             if row.get("chain")=="solana" and self.sol_chain.cooling_down():
                 continue
