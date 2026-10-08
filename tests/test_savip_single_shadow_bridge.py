@@ -40,7 +40,7 @@ class BridgeContractTests(unittest.TestCase):
             a,b=fixtures()
             a["created_at"]=b["created_at"]=datetime.now(timezone.utc)
             market=type("Market",(),{"observe":AsyncMock(return_value={"price_usd":0.02,"liquidity_usd":50000})})()
-            with patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \
+            with patch.dict("os.environ",{"SAVIP_SINGLE_SHADOW_ENTRY_ENABLED":"true"}), patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \
                  patch("app.research.savip_shadow_lifecycle.savip_jev_event_by_id",new=AsyncMock(return_value=b)), \
                  patch("app.research.savip_shadow_lifecycle.open_savip_positions",new=AsyncMock(return_value=[])), \
                  patch("app.research.savip_shadow_lifecycle.commit_savip_single_shadow_entry",new=AsyncMock(side_effect=[99,None])) as commit:
