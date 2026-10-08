@@ -4,7 +4,7 @@ from app.research.savip_jev_candidate import unjudged_chain_passes
 from app.research.savip_jev_evidence import build_evidence
 from app.research.savip_jev_adapter import run_typed_jev
 from app.research.savip_jev_questions import QUESTION_SETS,RULES
-from app.storage.db import claim_savip_jev,complete_savip_jev_claim,log_savip_jev,open_savip_positions
+from app.storage.db import claim_savip_jev,complete_savip_jev_claim,log_savip_jev,open_savip_positions,reconcile_stale_savip_jev_claims
 
 class SavipJevWorker:
     def __init__(self,provider,seconds=60,cap=3,on_pass=None,x_provider=None):
@@ -12,6 +12,7 @@ class SavipJevWorker:
         self.last_checked=0;self.last_passed=0;self.last_error=None
     async def run_cycle(self):
         self.last_checked=0;self.last_passed=0;self.last_error=None
+        await reconcile_stale_savip_jev_claims()
         if await open_savip_positions():return
         if not self.provider.configured:
             self.last_error="jev_not_configured";return
