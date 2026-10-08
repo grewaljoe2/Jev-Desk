@@ -38,6 +38,7 @@ class BridgeContractTests(unittest.TestCase):
     def test_shadow_entry_missing_x_and_idempotent_commit(self):
         async def scenario():
             a,b=fixtures()
+            a["created_at"]=b["created_at"]=datetime.now(timezone.utc)
             market=type("Market",(),{"observe":AsyncMock(return_value={"price_usd":0.02,"liquidity_usd":50000})})()
             with patch("app.research.savip_shadow_lifecycle.latest_accepted_savip_single_eligibility",new=AsyncMock(return_value=a)), \
                  patch("app.research.savip_shadow_lifecycle.savip_jev_event_by_id",new=AsyncMock(return_value=b)), \
