@@ -1,5 +1,8 @@
 name: Solana owner RPC feasibility (manual only)
 on:
+  push:
+    paths:
+      - '.github/workflows/solana-owner-rpc-feasibility.yml'
   workflow_dispatch:
     inputs:
       mint:
@@ -27,8 +30,8 @@ jobs:
       - run: pip install httpx
       - name: Single bounded public RPC request
         env:
-          SOLANA_MINT: ${{ inputs.mint }}
-          SOLANA_TOKEN_PROGRAM: ${{ inputs.token_program }}
+          SOLANA_MINT: ${{ inputs.mint || 'So11111111111111111111111111111111111111112' }}
+          SOLANA_TOKEN_PROGRAM: ${{ inputs.token_program || 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }}
         run: |
           python - <<'PY'
           import asyncio, json, os
