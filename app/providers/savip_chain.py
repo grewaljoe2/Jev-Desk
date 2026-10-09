@@ -5,11 +5,14 @@ import httpx
 
 class SavipChainProvider:
     SOL_RPC="https://api.mainnet-beta.solana.com"
+    # Public, no-key secondary route; never used to authorize owner coverage.
+    FALLBACK_RPC="https://public.rpc.solanavibestation.com/"
     def __init__(self):
         self.client=httpx.AsyncClient(timeout=20,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.3"})
         self._lock=asyncio.Lock()
         self._next_call_at=0.0
         self._cooldown_until=0.0
+        self._active_rpc=self.SOL_RPC
     def cooling_down(self):
         return time.monotonic()<self._cooldown_until
     async def fetch(self,chain,address):
@@ -17,6 +20,9 @@ class SavipChainProvider:
         # A failed RPC must never be interpreted as a clean wallet check.
         if self.cooling_down():
             raise RuntimeError("solana_rpc_cooldown_429")
+        if self._active_rpc==self.FALLBACK_RPC and time.monotonic()>=self._cooldown_until and self._cooldown_until>0:
+            self._active_rpc=self.SOL_RPC
+            self._cooldown_until=0.0
         supply=await self._rpc("getTokenSupply",[address,{"commitment":"confirmed"}])
         largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
         total=int((supply or {}).get("value",{}).get("amount") or 0)
@@ -31,12 +37,16 @@ class SavipChainProvider:
                 raise RuntimeError("solana_rpc_cooldown_429")
             delay=self._next_call_at-now
             if delay>0:await asyncio.sleep(delay)
-            r=await self.client.post(self.SOL_RPC,json={"jsonrpc":"2.0","id":1,"method":method,"params":params})
+            r=await self.client.post(self._active_rpc,json={"jsonrpc":"2.0","id":1,"method":method,"params":params})
             self._next_call_at=time.monotonic()+2.0
             if r.status_code==429:
                 retry=120.0
                 try:retry=max(60.0,min(900.0,float(r.headers.get("Retry-After","120"))))
                 except (TypeError,ValueError):pass
+                if self._active_rpc==self.SOL_RPC:
+                    self._active_rpc=self.FALLBACK_RPC
+                    self._next_call_at=time.monotonic()+2.0
+                    raise RuntimeError("solana_rpc_primary_rate_limited_fallback_selected_429")
                 self._cooldown_until=time.monotonic()+retry
                 raise RuntimeError("solana_rpc_rate_limited_429")
             r.raise_for_status()
