@@ -5,6 +5,7 @@ in ONE getMultipleAccounts response. Never infer completeness merely from
 discovery; conservation against the mint supply at that same response slot
 is mandatory. This path intentionally does not authorize production CHAIN.
 """
+import base64
 import httpx
 from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_mint_account, decode_token_account
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
@@ -45,6 +46,9 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             if type(slot) is not int or slot<0 or not isinstance(values,list) or len(values)!=len(addresses)+1:
                 return {**denied,"status":"invalid_atomic_response"}
             mint_data=decode_mint_account(values[0],program=program)
+            mint_raw=base64.b64decode(values[0]["data"][0],validate=True)
+            mint_authority_open=int.from_bytes(mint_raw[0:4],"little")==1
+            freeze_authority_open=int.from_bytes(mint_raw[46:50],"little")==1
             rows=[]
             for address,value in zip(addresses,values[1:]):
                 if value is None:
@@ -55,6 +59,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                                              supply_amount=mint_data["amount"],supply_slot=slot)
             return {**outcome,"status":"atomic_research_"+str(outcome.get("status")),
                     "atomic_snapshot_slot":slot,"discovered_accounts":len(addresses),
+                    "mint_authority":mint_authority_open,"freeze_authority":freeze_authority_open,
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
     except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError, UnicodeError):
         return {**denied,"status":"atomic_rpc_or_decode_error"}
