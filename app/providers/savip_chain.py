@@ -1,6 +1,7 @@
 """Savip Solana top-wallet helper. Fail closed on RPC limits; shadow only."""
 import asyncio
 import time
+import os
 import httpx
 from app.research.solana_owner_evidence_pipeline import collect_independently_confirmed_owner_evidence
 
@@ -69,6 +70,23 @@ class SavipChainProvider:
         return {"owner_coverage_complete":True,"top_wallet_fraction":float(fraction),
                 "holder_count":holders,"top_10_percent":float(top10),
                 "status":"independently_verified","source":"solana_independent_owner_evidence"}
+
+    async def fetch_helius_owner_evidence(self,address):
+        """Bounded real-candidate Helius scan. Diagnostic only, never a wallet pass."""
+        from app.research.solana_helius_cursor_research import collect_cursor_owner_research
+        key=os.environ.get("HELIUS_API_KEY")
+        if not key:
+            return {"status":"helius_not_configured","owner_coverage_complete":False}
+        try:
+            result=await collect_cursor_owner_research(address,api_key=key,max_pages=20,
+                                                       page_size=1000,timeout_seconds=10)
+            return {"status":result.get("status","invalid_evidence"),
+                    "token_accounts":result.get("token_accounts"),
+                    "holder_count":result.get("holder_count"),
+                    "slot_stable":result.get("slot_stable"),
+                    "owner_coverage_complete":False}
+        except Exception:
+            return {"status":"helius_evidence_exception","owner_coverage_complete":False}
 
     async def _rpc(self,method,params):
         async with self._lock:
