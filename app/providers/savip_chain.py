@@ -48,7 +48,7 @@ class SavipChainProvider:
         """
         try:
             result=await collect_independently_confirmed_owner_evidence(address)
-        except (Exception) as exc:
+        except Exception:
             return {"owner_coverage_complete":False,"status":"evidence_exception",
                     "source":"solana_independent_owner_evidence"}
         confirmed=(result.get("cross_provider_owner_match") is True
