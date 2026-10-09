@@ -27,7 +27,11 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
         return {**denied,"status":"cross_provider_atomic_mismatch"}
     if not first.get("owner_balance_digest") or type(first.get("supply_amount")) is not int or first["supply_amount"]<=0:
         return {**denied,"status":"missing_owner_digest"}
+    # Evidence is sufficient for a bounded classic-SPL shadow eligibility
+    # decision only when both providers independently conserve the supply.
+    # This function still does not authorize CHAIN or live execution.
     return {**denied,"status":"atomic_independently_correlated_research",
+            "shadow_owner_evidence_eligible":True,
             "positive_balance_coverage_proven":True,
             "cross_provider_owner_match":True,
             "primary_snapshot_slot":first["atomic_snapshot_slot"],
