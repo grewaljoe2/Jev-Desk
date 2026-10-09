@@ -21,7 +21,7 @@ class SavipChainProvider:
         largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
         total=int((supply or {}).get("value",{}).get("amount") or 0)
         vals=(largest or {}).get("value") or [];amounts=[int(x.get("amount") or 0) for x in vals]
-        return {"top_wallet_fraction":amounts[0]/total if total and amounts else None,"source":"solana_rpc"}
+        # Largest token *accounts* do not prove wallet-owner concentration.\n        # Preserve this as a lower-bound observation, never a verified pass.\n        return {"top_wallet_fraction":None,"largest_token_account_fraction":amounts[0]/total if total and amounts else None,"owner_coverage_complete":False,"source":"solana_rpc_token_accounts_unverified"}
     async def _rpc(self,method,params):
         async with self._lock:
             now=time.monotonic()
