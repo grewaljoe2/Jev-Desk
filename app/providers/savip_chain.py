@@ -23,8 +23,16 @@ class SavipChainProvider:
         if self._active_rpc==self.FALLBACK_RPC and time.monotonic()>=self._cooldown_until and self._cooldown_until>0:
             self._active_rpc=self.SOL_RPC
             self._cooldown_until=0.0
-        supply=await self._rpc("getTokenSupply",[address,{"commitment":"confirmed"}])
-        largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
+        try:
+            supply=await self._rpc("getTokenSupply",[address,{"commitment":"confirmed"}])
+            largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
+        except RuntimeError as exc:
+            if str(exc)!="solana_rpc_primary_rate_limited_fallback_selected_429":
+                raise
+            # One bounded immediate failover, never a retry loop. Restart both
+            # observations on the same provider after switching endpoints.
+            supply=await self._rpc("getTokenSupply",[address,{"commitment":"confirmed"}])
+            largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
         total=int((supply or {}).get("value",{}).get("amount") or 0)
         vals=(largest or {}).get("value") or [];amounts=[int(x.get("amount") or 0) for x in vals]
         # Largest token *accounts* do not prove wallet-owner concentration.
