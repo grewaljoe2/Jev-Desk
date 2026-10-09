@@ -2,6 +2,8 @@
 from app.strategy.reference_thresholds import HARD
 
 def evaluate_chain(d):
+    if d.get("chain")=="solana" and (d.get("solana_wallet_rpc_status")!="ok" or d.get("top_wallet_percent") is None):
+        return False,"solana_owner_unverified"
     tw=d.get("top_wallet_percent")
     if tw is not None and float(tw)>HARD["max_top_wallet"]:return False,"top_wallet"
     t10=d.get("top_10_percent")
