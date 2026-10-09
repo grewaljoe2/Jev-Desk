@@ -63,6 +63,14 @@ class HeliusCollectorRPCTests(unittest.TestCase):
         a["result"]["value"]["totalResults"]=2
         r,_=self.collect([a])
         self.assertEqual(r["status"],"reported_total_account_mismatch")
+    def test_missing_total_is_unverified(self):
+        r,_=self.collect([page(100,[acct("A",1,40)],None)])
+        self.assertEqual(r["status"],"cursor_exhausted_unverified")
+        self.assertIsNone(r["reported_total_stable"])
+    def test_zero_balance_not_holder(self):
+        r,_=self.collect([page(100,[acct("A",1,0),acct("B",2,60)],None)])
+        self.assertEqual(r["holder_count"],1)
+        self.assertEqual(r["accounts_total"],60)
     def test_research_page_size_10000(self):
         r,_=self.collect([page(100,[acct("A",1,40)],None)],page_size=10000)
         self.assertEqual(r["status"],"cursor_exhausted_unverified")
