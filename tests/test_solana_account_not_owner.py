@@ -12,7 +12,7 @@ class SolanaAccountSafetyTests(unittest.TestCase):
                 {"value":{"amount":"1000"}},
                 {"value":[{"amount":"20"},{"amount":"10"}]}
             ])
-            result=await p.fetch("solana","mint")
+            result=await p.fetch("solana","So11111111111111111111111111111111111111112")
             self.assertIsNone(result["top_wallet_fraction"])
             self.assertFalse(result["owner_coverage_complete"])
             self.assertEqual(result["largest_token_account_fraction"],0.02)
