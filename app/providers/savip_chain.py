@@ -108,7 +108,11 @@ class SavipChainProvider:
             or len(result["owner_balance_digest"])!=64
             or type(result.get("primary_snapshot_slot")) is not int
             or type(result.get("secondary_snapshot_slot")) is not int):
-            return {"owner_coverage_complete":False,"status":result.get("status","atomic_unverified")}
+            return {"owner_coverage_complete":False,"status":result.get("status","atomic_unverified"),
+                    "primary_status":result.get("primary_status"),
+                    "secondary_status":result.get("secondary_status"),
+                    "failed_provider":("primary" if result.get("status")=="primary_unverified" else
+                                       "secondary" if result.get("status")=="secondary_unverified" else None)}
         fraction=result.get("largest_owner_fraction")
         top10=result.get("top_10_percent")
         if (type(fraction) not in (int,float) or not (0<=fraction<=1)
