@@ -68,3 +68,8 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - A fresh single soft pass would route to standalone eligibility but SAVIP_SINGLE_ELIGIBILITY_ENABLED defaults false; this is intentional paid-call safety, not an accidental worker fault. Do not enable without user approval. Standalone shadow entry also defaults false. Comparative PICK requires two contemporaneous distinct soft survivors.
 - Solana CHAIN still uses getTokenLargestAccounts token-account concentration as if it were owner concentration, an incomplete proof. Keep Solana fail closed until complete owner-aware coverage is independently validated; public RPC 429 and incomplete owner semantics remain the key upstream blockers. Do not relax gates or add paid APIs.
 - Prioritize genuine fresh eligible cohort measurement, not fake fills or artificially extended freshness. 
+
+## PR #205 Solana wallet-owner safety
+- PR #205 merged 06f17379e0fb173051522b7355e98a0a148a5074; workflow 37864058672 SUCCESS. Provider now reports largest_token_account_fraction as unverified diagnostic, top_wallet_fraction=None, owner_coverage_complete=False; CHAIN worker only marks owner check 'ok' when coverage_complete true and keeps incomplete evidence out of wallet concentration gate. Existing offline owner coverage tests plus new token-account regression executed in CI.
+- This deliberately does NOT solve Solana wallet verification; Solana CHAIN remains pending until complete owner-aware collector is validated, with public RPC rate limits. Do not treat zero Solana CHAIN passes as fixed by this patch.
+- NEXT: deploy/verify; then research no-cost complete owner enumeration feasibility, rate-limit-safe approach and offline tests. No paid APIs or relaxed thresholds.
