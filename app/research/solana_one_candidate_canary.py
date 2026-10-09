@@ -14,6 +14,7 @@ def evaluate_one_candidate(dossier, wallet_evidence):
         return {"status":"chain_kill","chain_pass":False,"reason":early}
     if not isinstance(wallet_evidence,dict):
         wallet_evidence={}
+    # Only a separately verified collector may supply approval flags; do not infer them from metrics.
     verified=(wallet_evidence.get("owner_coverage_complete") is True
               and wallet_evidence.get("chain_pass_allowed") is True
               and wallet_evidence.get("positive_balance_coverage_proven") is True)
@@ -25,6 +26,8 @@ def evaluate_one_candidate(dossier, wallet_evidence):
     top10=wallet_evidence.get("top_10_percent")
     if type(fraction) not in (float,int) or not 0<=fraction<=1 or type(holders) is not int or type(top10) not in (float,int) or not 0<=top10<=100:
         return {"status":"invalid_wallet_metrics","chain_pass":False}
+    if dossier.get("mint_authority") is None or dossier.get("freeze_authority") is None:
+        return {"status":"missing_authority_evidence","chain_pass":False}
     facts={**dossier,"solana_wallet_rpc_status":"ok",
            "top_wallet_percent":fraction,"holder_count":holders,
            "top_10_percent":top10}
