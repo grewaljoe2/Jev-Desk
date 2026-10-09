@@ -99,13 +99,18 @@ class SavipChainWorker:
                                 d["solana_owner_primary_status"]=verified.get("primary_status")
                                 d["solana_owner_secondary_status"]=verified.get("secondary_status")
                                 d["solana_owner_failed_provider"]=verified.get("failed_provider")
-                                # Helius can supply bounded candidate diagnostics when public
-                                # providers cannot attest a complete wallet map. Its
-                                # multi-slot cursor scan is NEVER accepted as a CHAIN pass.
+                                # Two matching complete Helius account maps plus independent
+                                # mint/supply/largest-account corroboration are required.
                                 helius=await self.sol_chain.fetch_helius_owner_evidence(address)
                                 d["solana_helius_evidence_status"]=helius.get("status")
                                 d["solana_helius_token_accounts"]=helius.get("token_accounts")
                                 d["solana_helius_slot_stable"]=helius.get("slot_stable")
+                                if helius.get("owner_coverage_complete") is True and helius.get("chain_pass_allowed") is True:
+                                    d["top_wallet_percent"]=helius["top_wallet_fraction"]
+                                    d["holder_count"]=helius["holder_count"]
+                                    d["top_10_percent"]=helius["top_10_percent"]
+                                    d["solana_wallet_rpc_status"]="ok"
+                                    d["solana_owner_evidence_source"]=helius.get("source")
                     except RuntimeError as rpc_error:
                         if "solana_rpc_" not in str(rpc_error):raise
                         # The GT dossier is still valid; do not claim the wallet check passed.
