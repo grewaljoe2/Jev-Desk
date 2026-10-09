@@ -51,7 +51,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
                 if network=="solana" and s.age_minutes is not None:
                     from app.research.savip_liquidity_experiment import compare_liquidity_gate
                     comparison=compare_liquidity_gate(s.model_dump())
-                    research.append({"token_id":s.token_id,"pool_id":s.raw.get("pool_id"),"source":source,"dex_id":((row.get("relationships") or {}).get("dex") or {}).get("data",{}).get("id"),
+                    research.append({"token_id":s.token_id,"pool_id":s.raw.get("pool_id"),"source":source,"dex_id":(((row.get("relationships") or {}).get("dex") or {}).get("data") or {}).get("id"),
                                      "liquidity_usd":s.liquidity_usd,"original_discovery_gate":gate,
                                      "control_eligible":comparison.control_eligible,
                                      "experiment_eligible":comparison.experiment_eligible,
