@@ -81,7 +81,7 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
 
     This does not authorize production CHAIN passes. Both snapshots must
     independently conserve supply at their respective slots, and have identical
-    per-owner balances; different snapshot slots are not silently reconciled.
+    per-owner balances. Different slots require exact owner-map and supply\n    equality; no interpolation or inferred state is accepted.
     """
     denied={"status":"independent_confirmation_unavailable",
             "owner_coverage_complete":False,"chain_pass_allowed":False}
