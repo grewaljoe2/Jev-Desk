@@ -19,6 +19,25 @@ def b58encode(data):
         chars = ALPHABET[digit] + chars
     return "1" * (len(data) - len(data.lstrip(bytes([0])))) + chars
 
+def decode_mint_account(value, *, program):
+    """Validate initialized SPL mint bytes and return supply/decimals."""
+    if program not in SUPPORTED or not isinstance(value, dict) or value.get("owner") != program:
+        raise ValueError("invalid_mint_program")
+    data = value.get("data")
+    if not isinstance(data, list) or len(data) != 2 or data[1] != "base64":
+        raise ValueError("missing_mint_base64")
+    try:
+        raw = base64.b64decode(data[0], validate=True)
+    except (TypeError, ValueError, binascii.Error) as exc:
+        raise ValueError("invalid_mint_base64") from exc
+    if len(raw) < 82 or (program == TOKEN_PROGRAM and len(raw) != 82):
+        raise ValueError("invalid_mint_size")
+    if raw[45] != 1 or raw[44] > 18:
+        raise ValueError("invalid_mint_state")
+    if int.from_bytes(raw[0:4], "little") not in (0, 1) or int.from_bytes(raw[46:50], "little") not in (0, 1):
+        raise ValueError("invalid_mint_authority_option")
+    return {"amount": int.from_bytes(raw[36:44], "little"), "decimals": raw[44]}
+
 def decode_token_account(item, *, mint, program, slot):
     """Decode one full base64 SPL token account; raise ValueError on any ambiguity."""
     if program not in SUPPORTED or not isinstance(slot, int) or isinstance(slot, bool) or slot < 0:
