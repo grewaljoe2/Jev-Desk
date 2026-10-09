@@ -54,6 +54,9 @@ class SavipChainProvider:
             return {"owner_coverage_complete":False,"status":"evidence_exception",
                     "source":"solana_independent_owner_evidence"}
         confirmed=(result.get("cross_provider_owner_match") is True
+                   and result.get("cross_provider_same_slot") is True
+                   and type(result.get("primary_snapshot_slot")) is int
+                   and result.get("primary_snapshot_slot")==result.get("secondary_snapshot_slot")
                    and result.get("positive_balance_coverage_proven") is True
                    and result.get("status")=="independently_correlated_research")
         fraction=result.get("largest_owner_fraction")
