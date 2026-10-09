@@ -112,7 +112,7 @@ async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-bet
     from app.research.solana_rpc_owner_decoder import decode_sliced_rpc_snapshot
     denied={"status":"full_snapshot_unverified","chain_pass_allowed":False,
             "owner_coverage_complete":False}
-    if not isinstance(mint,str) or not mint or max_accounts>20000 or max_accounts<1:
+    if not isinstance(mint,str) or not mint or type(max_accounts) is not int or max_accounts>20000 or max_accounts<1:
         return denied
     async def rpc(client,method,params):
         response=await client.post(rpc_url,json={"jsonrpc":"2.0","id":1,
