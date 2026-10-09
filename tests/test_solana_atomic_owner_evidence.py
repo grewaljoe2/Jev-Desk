@@ -4,7 +4,7 @@ import base64
 import json
 import unittest
 import httpx
-from app.research.solana_atomic_owner_evidence import collect_atomic_small_mint
+from app.research.solana_atomic_owner_evidence import collect_atomic_small_mint, collect_full_sliced_snapshot
 from app.research.solana_rpc_owner_decoder import TOKEN_PROGRAM, b58encode
 
 MINT=b58encode(bytes([7])*32)
@@ -163,3 +163,45 @@ class AtomicOwnerTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+class FullSlicedSnapshotTests(unittest.TestCase):
+    def test_large_sliced_same_slot_reconciles(self):
+        count=350
+        rows=[]
+        for i in range(count):
+            raw=bytearray(77)
+            raw[:32]=i.to_bytes(32,"big")
+            raw[32:40]=(1).to_bytes(8,"little")
+            raw[76]=2
+            rows.append({"pubkey":b58encode((i+1000).to_bytes(32,"big")),
+                         "account":{"owner":TOKEN_PROGRAM,"data":b64(raw)}})
+        def handler(request):
+            call=json.loads(request.content)
+            if call["method"]=="getProgramAccounts":
+                result={"context":{"slot":120},"value":rows}
+            elif call["method"]=="getAccountInfo":
+                result={"context":{"slot":120},"value":mint_value(supply=count)}
+            else:
+                raise AssertionError(call["method"])
+            return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
+        result=asyncio.run(collect_full_sliced_snapshot(MINT,transport=httpx.MockTransport(handler)))
+        self.assertTrue(result["positive_balance_coverage_proven"])
+        self.assertEqual(result["holder_count"],count)
+        self.assertEqual(result["discovered_accounts"],count)
+        self.assertFalse(result["chain_pass_allowed"])
+
+    def test_sliced_slot_mismatch_fails_closed(self):
+        raw=bytearray(77)
+        raw[32:40]=(100).to_bytes(8,"little")
+        raw[76]=2
+        def handler(request):
+            call=json.loads(request.content)
+            if call["method"]=="getProgramAccounts":
+                result={"context":{"slot":120},"value":[{"pubkey":ACCOUNT,
+                    "account":{"owner":TOKEN_PROGRAM,"data":b64(raw)}}]}
+            else:
+                result={"context":{"slot":121},"value":mint_value()}
+            return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
+        result=asyncio.run(collect_full_sliced_snapshot(MINT,transport=httpx.MockTransport(handler)))
+        self.assertEqual(result["status"],"full_snapshot_slot_mismatch")
+        self.assertFalse(result["owner_coverage_complete"])
