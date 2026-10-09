@@ -88,3 +88,8 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - PR #208 merged 11b882308f7b83b497ac6d2a6ec8d23ed8a4a28d, CI 37864962592 SUCCESS. Token account over HARD max_top_wallet proves wallet owner breach and is now persisted as CHAIN kill reason top_wallet_lower_bound; otherwise Solana remains unverified, never passes based on this shortcut. No new RPC calls or threshold changes.
 - PR #207 deployment dep-db439gvlk1mc73elkb90 LIVE commit 2e5123469bcfd72f865129ba013787b6a52b1891; startup 00:27:22 UTC, GET / 200 at 00:27:31 UTC.
 - Remaining upstream blocker: complete owner enumeration and owner aggregation for genuinely passing Solana candidates, while avoiding 429 and false completeness. #208 does not solve that.
+
+## 2026-10-09 PR #209 pending diagnostics
+- PR #209 merged 9985bfab3b0088c031353803c3845dfbe6a5ba8d, CI 37865267467 SUCCESS. Solana owner-incomplete attempt now appears as retry_pending instead of generic error; remains blocked and does not trade. No changes to calls/thresholds.
+- PR #208 deployment dep-db43anrncjis73bko800 LIVE commit 8807c2b7550dcd5bebaf18bef2d4e0c12d0f7484; startup 00:29:57 UTC and GET / 200 at 00:30:07 UTC.
+- Still need real owner-aware complete collector. Avoid repeated small diagnostics-only PRs; prioritize actual upstream verification feasibility and throughput.
