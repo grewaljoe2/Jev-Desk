@@ -39,7 +39,9 @@ def reconcile_owner_balances(snapshot, *, mint, program, supply_amount, supply_s
     # no omitted token account can hold a positive balance. This is conditional
     # on the integrity of the RPC snapshot, not an independent provider audit.
     covered = matching and len(accounts)>0 and largest>=0
+    owner_digest = hashlib.sha256(json.dumps(sorted(owners.items()),separators=(",",":")).encode()).hexdigest() if covered else None
     return {**result, "status": "reconciled_unverified" if covered else "supply_mismatch",
+            "owner_balance_digest": owner_digest,
             "positive_balance_coverage_proven": covered,
             "token_accounts": len(accounts), "unique_owners": len(owners),
             "accounts_total": total, "supply_amount": supply_amount,
