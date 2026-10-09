@@ -13,10 +13,12 @@ ACCOUNT=b58encode(bytes([9])*32)
 def b64(raw):
     return [base64.b64encode(raw).decode(),"base64"]
 
-def mint_value(supply=100):
+def mint_value(supply=100,authority_option=0,freeze_option=0):
     raw=bytearray(82)
     raw[36:44]=supply.to_bytes(8,"little")
     raw[45]=1
+    raw[0:4]=authority_option.to_bytes(4,"little")
+    raw[46:50]=freeze_option.to_bytes(4,"little")
     return {"owner":TOKEN_PROGRAM,"data":b64(raw)}
 
 def token_value(amount=100):
@@ -28,7 +30,7 @@ def token_value(amount=100):
     return {"owner":TOKEN_PROGRAM,"data":b64(raw)}
 
 class AtomicOwnerTests(unittest.TestCase):
-    def run_case(self,amount=100,accounts=1,missing_account=False,atomic_slot=102):
+    def run_case(self,amount=100,accounts=1,missing_account=False,atomic_slot=102,authority_option=0,freeze_option=0):
         def handler(request):
             call=json.loads(request.content)
             method=call["method"]
@@ -37,7 +39,7 @@ class AtomicOwnerTests(unittest.TestCase):
             elif method=="getProgramAccounts":
                 result={"context":{"slot":101},"value":[{"pubkey":ACCOUNT,"account":{}} for _ in range(accounts)]}
             elif method=="getMultipleAccounts":
-                result={"context":{"slot":atomic_slot},"value":[mint_value(),None if missing_account else token_value(amount)]}
+                result={"context":{"slot":atomic_slot},"value":[mint_value(authority_option=authority_option,freeze_option=freeze_option),None if missing_account else token_value(amount)]}
             else:
                 raise AssertionError(method)
             return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
@@ -63,6 +65,14 @@ class AtomicOwnerTests(unittest.TestCase):
         result=self.run_case(atomic_slot=100)
         self.assertEqual(result["status"],"invalid_atomic_response")
         self.assertFalse(result["chain_pass_allowed"])
+
+    def test_malformed_authority_discriminants_fail_closed(self):
+        for mint_option,freeze_option in ((2,0),(0,2),(255,0),(0,255)):
+            with self.subTest(mint_option=mint_option,freeze_option=freeze_option):
+                result=self.run_case(authority_option=mint_option,freeze_option=freeze_option)
+                self.assertEqual(result["status"],"invalid_mint_authority_encoding")
+                self.assertFalse(result["owner_coverage_complete"])
+                self.assertFalse(result["chain_pass_allowed"])
 
     def test_atomic_account_limit(self):
         result=self.run_case(accounts=100)
