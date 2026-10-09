@@ -46,7 +46,7 @@ async def _helius_one_shot_research():
         return
     try:
         result=await collect_cursor_owner_research(mint,api_key=key,max_pages=20,page_size=1000,timeout_seconds=10)
-        allowed={"status","pages","token_accounts","unique_owners","accounts_total","slot_stable","first_slot","last_slot","reported_total_min","reported_total_max","reported_total_stable"}
+        allowed={"status","pages","token_accounts","unique_owners","accounts_total","slot_stable","first_slot","last_slot","reported_total_min","reported_total_max","reported_total_stable","holder_count","largest_owner_amount","top_10_owner_amount","owner_balance_digest","account_balance_digest"}
         helius_research_status={k:v for k,v in result.items() if k in allowed}
         helius_research_status.update(owner_coverage_complete=False,chain_pass_allowed=False)
         if result.get("status")=="cursor_exhausted_unverified":
