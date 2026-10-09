@@ -113,3 +113,7 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Standard `getProgramAccounts` returns a single filtered result rather than a paginated stable historical snapshot; its size and public-RPC limits are operational constraints. Solana Cookbook notes no standard pagination and potentially truncated/failed large responses: https://solanacookbook.com/guides/get-program-accounts.html .
 - Therefore: stop treating repeated slot equality retries as the primary solution. Evaluate an actual coherent indexed/historical snapshot contract, or a small-mint one-response owner-map strategy with separately demonstrated supply consistency; neither currently grants CHAIN authorization.
 - No Helius API key, paid subscription, deployment, or altered risk threshold required for this documentation audit.
+
+## Frozen token-account state regression execution
+- Reproduced the new frozen-account decoder behavior in the isolated local `/mnt/data/jev_offline` suite and executed `python -m unittest discover -s tests -v`: **28 tests, all passed**, including three frozen/uninitialized-state cases.
+- The local decoder and tests are reconstructed equivalents, **not byte-identical GitHub files**; do not present as repository CI or live RPC verification. Full integration and snapshot proof remain open.
