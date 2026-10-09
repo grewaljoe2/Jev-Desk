@@ -23,7 +23,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
         response=await client.post(rpc_url,json={"jsonrpc":"2.0","id":1,"method":method,"params":params})
         response.raise_for_status()
         if len(response.content)>2_000_000:
-            raise ValueError("oversized_response")
+            raise RpcRejected("response_too_large")
         body=response.json()
         if isinstance(body,dict) and isinstance(body.get("error"),dict):
             code=body["error"].get("code")
