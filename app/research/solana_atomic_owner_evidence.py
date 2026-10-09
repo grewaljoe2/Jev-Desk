@@ -58,8 +58,14 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                 return {**denied,"status":"mint_program_changed"}
             mint_data=decode_mint_account(values[0],program=program)
             mint_raw=base64.b64decode(values[0]["data"][0],validate=True)
-            mint_authority_open=int.from_bytes(mint_raw[0:4],"little")==1
-            freeze_authority_open=int.from_bytes(mint_raw[46:50],"little")==1
+            # SPL COption discriminants must be exactly 0 (None) or 1 (Some).
+            # Malformed values must never be interpreted as revoked authorities.
+            mint_authority_option=int.from_bytes(mint_raw[0:4],"little")
+            freeze_authority_option=int.from_bytes(mint_raw[46:50],"little")
+            if mint_authority_option not in (0,1) or freeze_authority_option not in (0,1):
+                return {**denied,"status":"invalid_mint_authority_encoding"}
+            mint_authority_open=mint_authority_option==1
+            freeze_authority_open=freeze_authority_option==1
             rows=[]
             for address,value in zip(addresses,values[1:]):
                 if value is None:
