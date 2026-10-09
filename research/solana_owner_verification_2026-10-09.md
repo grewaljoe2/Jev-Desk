@@ -56,3 +56,8 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Research branch commits `dfda3b9` and `29815c3` now fail closed with `inconsistent_reported_total` or `reported_total_account_mismatch`, with two additional mocked-RPC tests.
 - Executed 11/11 tests locally against the reconstructed collector after equivalent code edits. **Not CI or full-repo checkout verification**; no owner-map certification and no CHAIN approval.
 - Potential caveat: provider `totalResults` semantics must be independently checked against Helius contract before treating mismatch as a permanent invalidity rather than a transient retryable inconsistency. No production deployment.
+
+## 13-case offline collector rerun (2026-10-09)
+- Executed `cd /mnt/data/jev_offline && python -m unittest discover -s tests -p 'test_helius_collector_rpc.py' -v` after adding local equivalents of the two new GitHub tests. Result: **13 tests run, 13 passed** (0.009 seconds).
+- **Important provenance limitation:** local collector and test files were manually reconstructed from connector-fetched repository source; the local test names/format differ from the committed GitHub test file. This is **not** a byte-identical Git checkout or GitHub CI run, and does not validate the full CHAIN worker or prove a complete consistent owner snapshot.
+- No merge or deployment; release gate remains blocked.
