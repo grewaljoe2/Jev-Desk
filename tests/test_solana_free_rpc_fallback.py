@@ -16,10 +16,12 @@ class SolanaFreeFallbackTests(unittest.TestCase):
             await provider.client.aclose()
             provider.client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
             try:
-                with self.assertRaisesRegex(RuntimeError,"fallback_selected_429"):
-                    await provider.fetch("solana","mint")
+                result=await provider.fetch("solana","mint")
+                self.assertFalse(result["owner_coverage_complete"])
                 self.assertEqual(provider._active_rpc,provider.FALLBACK_RPC)
-                self.assertEqual(len(calls),1)
+                self.assertEqual(len(calls),3)
+                self.assertIn("solanavibestation",calls[1])
+                self.assertIn("solanavibestation",calls[2])
                 self.assertFalse(provider.cooling_down())
             finally:
                 await provider.client.aclose()
