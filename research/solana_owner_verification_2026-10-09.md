@@ -77,3 +77,8 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - First attempt failed at import because local decoder reconstruction lacked `SUPPORTED`; resolved by removing unused imports from local testing shim (no GitHub source change), then reran successfully.
 - **Provenance caveat:** locally simplified copies of pipeline/provider functions were used, not exact GitHub module bytes. Therefore this validates the slot-check logic in isolation, not the actual full application import graph or integration. CI remains unverified.
 - Combined earlier mocked collector tests: 13/13 passed separately. No owner snapshot certification, no production merge or deploy.
+
+## Three-way slot alignment
+- Audit identified `getAccountInfo` mint slot could be earlier than `getProgramAccounts` token-account slot, while code only checked that account slot was not older. Reconciliation could then compare mint supply from an earlier state with later token accounts.
+- Research commit `5f6bc3c` rejects this with `mint_accounts_slot_mismatch`. Commit `2d9f78f` includes this mismatch in existing bounded per-provider retry path. Commit `cfe6f68` adds two mocked tests for retry failure and recovery; **not execution-verified**.
+- All three observations now must have equal slots before reconciliation, but a slot equality check alone is not proof of provider snapshot completeness or independence. No merge/deploy.
