@@ -71,7 +71,7 @@ class AtomicOwnerTests(unittest.TestCase):
         for mint_option,freeze_option in ((2,0),(0,2),(255,0),(0,255)):
             with self.subTest(mint_option=mint_option,freeze_option=freeze_option):
                 result=self.run_case(authority_option=mint_option,freeze_option=freeze_option)
-                self.assertIn(result["status"],("invalid_mint_authority_encoding","atomic_rpc_or_decode_error"))
+                self.assertIn(result["status"],("invalid_mint_authority_encoding","atomic_rpc_decode_error"))
                 self.assertFalse(result["owner_coverage_complete"])
                 self.assertFalse(result["chain_pass_allowed"])
 
@@ -131,7 +131,8 @@ class AtomicOwnerTests(unittest.TestCase):
         self.assertEqual(missing["status"],"discovered_account_missing")
         self.assertFalse(missing["chain_pass_allowed"])
         limited=run("rate_limit")
-        self.assertEqual(limited["status"],"atomic_rpc_or_decode_error")
+        self.assertEqual(limited["status"],"atomic_rpc_rate_limited")
+        self.assertEqual(limited["rpc_method"],"getMultipleAccounts")
         self.assertFalse(limited["owner_coverage_complete"])
 
     def test_maximum_299_accounts_reconcile(self):
