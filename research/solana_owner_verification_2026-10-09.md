@@ -97,3 +97,7 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 ## Offline approval-boundary rerun
 - Executed 25 isolated reconstructed local unittest cases after adapting local provider logic and tests to research approval-boundary commits `848778b` and `8f4c55c`: **25/25 passed**. An initial run failed two tests because local provider copy was stale; synchronized the local approval checks and reran successfully.
 - No full GitHub checkout, live RPC snapshot certification, or end-to-end CHAIN pass was performed. Production remains unchanged.
+
+## CHAIN worker infrastructure cooldown
+- Commit `7e6a082` classifies `mint_accounts_slot_mismatch` and `cross_provider_slot_mismatch` alongside existing `snapshot_slot_mismatch` infrastructure statuses, so affected candidates receive the worker's 3600-second cooldown rather than 120 seconds. This avoids repeating costly checks during provider inconsistency.
+- Source-level change is committed but no exact-source worker integration test has been executed. No production merge/deploy and no complete owner proof.
