@@ -77,6 +77,13 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                     return {**denied,"status":"index_total_exceeded","pages":pages}
                 if len(rows)<page_size and len(seen)!=expected_total:
                     return {**denied,"status":"index_total_mismatch","pages":pages}
+                # A provider-reported total equal to a completely full page may
+                # be a capped page count, not a global token-account count.
+                # Never treat that boundary as an exhausted owner index.
+                if len(seen)==expected_total and len(rows)==page_size:
+                    return {**denied,"status":"full_page_total_ambiguous",
+                            "pages":pages,"token_accounts":len(seen),
+                            "indexed_total":expected_total,"last_indexed_slot":indexed_slot}
                 if len(seen)==expected_total:
                     digest=hashlib.sha256(json.dumps(sorted(owners.items()),separators=(",",":")).encode()).hexdigest()
                     return {**denied,"status":"indexed_pages_exhausted_unverified",
