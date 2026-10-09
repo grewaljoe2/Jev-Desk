@@ -142,7 +142,8 @@ class SavipChainWorker:
                 reason_text=str(e)
                 infrastructure=("rate_limited","http_error","rpc_error","response_too_large",
                                 "timeout","transport_error","invalid_rpc_response",
-                                "snapshot_slot_mismatch","stale_supply_snapshot",
+                                "snapshot_slot_mismatch","mint_accounts_slot_mismatch",
+                                "cross_provider_slot_mismatch","stale_supply_snapshot",
                                 "independent_confirmation_unavailable")
                 cooldown=3600.0 if any(x in reason_text for x in infrastructure) else (300.0 if "429" in reason_text else 120.0)
                 self._recent_tokens[row["token_id"]]=time.monotonic()+cooldown
