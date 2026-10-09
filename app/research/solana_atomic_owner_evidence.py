@@ -11,6 +11,10 @@ import httpx
 from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_mint_account, decode_token_account
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
 
+class RpcRejected(Exception):
+    """Sanitized JSON-RPC rejection category, never raw provider data."""
+    pass
+
 async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.solana.com", transport=None, timeout=15):
     denied={"status":"atomic_evidence_unavailable","chain_pass_allowed":False,"owner_coverage_complete":False}
     if not isinstance(mint,str) or not mint:
@@ -21,7 +25,13 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
         if len(response.content)>2_000_000:
             raise ValueError("oversized_response")
         body=response.json()
-        if not isinstance(body,dict) or "error" in body or not isinstance(body.get("result"),dict):
+        if isinstance(body,dict) and isinstance(body.get("error"),dict):
+            code=body["error"].get("code")
+            kind=("method_unsupported" if code==-32601 else
+                  "provider_limit" if code in (-32005,-32004) else
+                  "invalid_params" if code==-32602 else "provider_rejected")
+            raise RpcRejected(kind)
+        if not isinstance(body,dict) or not isinstance(body.get("result"),dict):
             raise ValueError("invalid_rpc")
         return body["result"]
     stage="getAccountInfo"
@@ -102,6 +112,8 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                     "mint_authority":mint_authority_open,"freeze_authority":freeze_authority_open,
                     "owner_balance_digest":outcome.get("owner_balance_digest"),
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
+    except RpcRejected as exc:
+        return {**denied,"status":"atomic_rpc_"+str(exc),"rpc_method":stage}
     except httpx.HTTPStatusError as exc:
         code=exc.response.status_code
         category=("rate_limited" if code==429 else "forbidden" if code in (401,403)
