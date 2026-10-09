@@ -53,7 +53,9 @@ class SavipChainProvider:
         except Exception:
             return {"owner_coverage_complete":False,"status":"evidence_exception",
                     "source":"solana_independent_owner_evidence"}
-        confirmed=(result.get("cross_provider_owner_match") is True
+        confirmed=(result.get("chain_pass_allowed") is True
+                   and result.get("owner_coverage_complete") is True
+                   and result.get("cross_provider_owner_match") is True
                    and result.get("cross_provider_same_slot") is True
                    and type(result.get("primary_snapshot_slot")) is int
                    and result.get("primary_snapshot_slot")==result.get("secondary_snapshot_slot")
