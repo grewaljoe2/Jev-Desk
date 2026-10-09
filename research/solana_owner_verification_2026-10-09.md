@@ -44,3 +44,9 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Attempted `python -m unittest discover -s /mnt/data/jev_research -p 'test_helius_collector_rpc.py' -v`: **FAILED TO START** with `ModuleNotFoundError: No module named 'app'` because the working container has only the test file, not a checked-out Jev Desk repository. This is an environment/import failure, not a failing RPC assertion and not a passing integration test.
 - GitHub connector has repository source, but local container cannot resolve `github.com` to clone; do not claim the mocked-RPC tests were executed until the actual app modules are present.
 - Remediation: run test from a complete repository checkout or in GitHub Actions on research branch; do not merge/deploy based on standalone synthetic tests.
+
+## Offline execution checkpoint — mocked collector (2026-10-09)
+- Reconstructed the relevant collector and decoder modules locally from GitHub connector source into `/mnt/data/jev_offline/` because direct GitHub clone is unavailable in the container. Reconstructed the nine committed mocked-RPC tests locally.
+- Executed `cd /mnt/data/jev_offline && python -m unittest discover -s tests -p 'test_helius_collector_rpc.py' -v`: **9 tests ran, 9 passed** (0.008s).
+- Tested: same-slot still diagnostic, mixed-slot still diagnostic, duplicate account, missing cursor, page cap, 429, wrong program, Token-2022 diagnostic, 10k page-size acceptance.
+- **Scope limitation:** This is a manually reconstructed copy, not a verified byte-identical Git checkout or GitHub CI run. No full worker/pipeline integration tested. No consistent complete ownership-map certification demonstrated. Production release gate remains BLOCKED.
