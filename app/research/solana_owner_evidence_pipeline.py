@@ -56,6 +56,12 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             slot=(supply.get("context") or {}).get("slot")
             if not isinstance(amount,str) or not amount.isdecimal():
                 return {**denied,"status":"invalid_supply"}
+            if type(slot) is not int or slot < snapshot["slot"]:
+                return {**denied,"status":"stale_supply_snapshot","mint_program":program,
+                        "mint_slot":mint_slot,"accounts_slot":snapshot["slot"],"supply_slot":slot}
+            if slot != snapshot["slot"]:
+                return {**denied,"status":"snapshot_slot_mismatch","mint_program":program,
+                        "mint_slot":mint_slot,"accounts_slot":snapshot["slot"],"supply_slot":slot}
             outcome=reconcile_owner_balances(snapshot,mint=mint,program=program,supply_amount=int(amount),supply_slot=slot)
             return {**outcome,"mint_program":program,"mint_slot":mint_slot,"accounts_slot":snapshot["slot"],"supply_slot":slot}
     except (httpx.TimeoutException,asyncio.TimeoutError):
