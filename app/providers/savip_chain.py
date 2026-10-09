@@ -58,7 +58,9 @@ class SavipChainProvider:
         fraction=result.get("largest_owner_fraction")
         if not confirmed or type(fraction) not in (int,float) or not (0<=fraction<=1):
             return {"owner_coverage_complete":False,"status":result.get("status","invalid_evidence"),
-                    "source":"solana_independent_owner_evidence"}
+                    "source":"solana_independent_owner_evidence",
+                    "primary_status":result.get("primary_status"),"secondary_status":result.get("secondary_status"),
+                    "failed_provider":result.get("failed_provider")}
         return {"owner_coverage_complete":True,"top_wallet_fraction":float(fraction),
                 "status":"independently_verified","source":"solana_independent_owner_evidence"}
 

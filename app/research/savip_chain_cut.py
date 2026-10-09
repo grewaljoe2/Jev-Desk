@@ -32,6 +32,11 @@ def evaluate_chain(d):
         return False,"authority_open"
     if d.get("chain")=="bsc" and d.get("is_honeypot") is True:
         return False,"honeypot"
+    # Missing mandatory CHAIN facts cannot be treated as an approval.
+    required=("holder_count","top_wallet_percent","top_10_percent")
+    if d.get("chain")=="solana":required+=("mint_authority","freeze_authority")
+    if d.get("chain")=="bsc":required+=("is_honeypot",)
+    if any(d.get(field) is None for field in required):return False,"missing_chain_evidence"
     return True,"pass"
 
 

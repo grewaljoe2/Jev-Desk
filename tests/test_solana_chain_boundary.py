@@ -14,7 +14,7 @@ class SolanaChainBoundaryTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason,"top_wallet")
     def test_other_chains_unaffected(self):
-        self.assertEqual(evaluate_chain({"chain":"bsc","top_wallet_percent":0.01}),(True,"pass"))
+        self.assertEqual(evaluate_chain({"chain":"bsc","top_wallet_percent":0.01}),(False,"missing_chain_evidence"))
 
 if __name__=="__main__":
     unittest.main()

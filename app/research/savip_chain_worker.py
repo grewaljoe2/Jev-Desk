@@ -94,6 +94,9 @@ class SavipChainWorker:
                                 d["top_wallet_percent"]=None
                                 d["solana_wallet_rpc_status"]="unverified_owner_coverage"
                                 d["solana_owner_evidence_status"]=verified.get("status")
+                                d["solana_owner_primary_status"]=verified.get("primary_status")
+                                d["solana_owner_secondary_status"]=verified.get("secondary_status")
+                                d["solana_owner_failed_provider"]=verified.get("failed_provider")
                     except RuntimeError as rpc_error:
                         if "solana_rpc_" not in str(rpc_error):raise
                         # The GT dossier is still valid; do not claim the wallet check passed.
@@ -109,6 +112,8 @@ class SavipChainWorker:
                     raise RuntimeError("solana_wallet_check_pending_unverified: "+d.get("solana_wallet_rpc_error","unknown"))
                 if row["chain"]=="solana" and d.get("solana_wallet_rpc_status")!="ok":
                     evidence_status=str(d.get("solana_owner_evidence_status") or d.get("solana_wallet_rpc_status") or "unknown")
+                    provider_status=d.get("solana_owner_primary_status") if d.get("solana_owner_failed_provider")=="primary" else d.get("solana_owner_secondary_status")
+                    if provider_status:evidence_status+=" / "+str(d.get("solana_owner_failed_provider"))+":"+str(provider_status)
                     raise RuntimeError("solana_wallet_check_pending_unverified: "+evidence_status[:80])
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
