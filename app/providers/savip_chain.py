@@ -38,6 +38,29 @@ class SavipChainProvider:
         # Largest token *accounts* do not prove wallet-owner concentration.
         # Preserve this as a lower-bound observation, never a verified pass.
         return {"top_wallet_fraction":None,"largest_token_account_fraction":amounts[0]/total if total and amounts else None,"owner_coverage_complete":False,"source":"solana_rpc_token_accounts_unverified"}
+
+    async def fetch_independent_owner_evidence(self,address):
+        """Bounded read-only two-provider verification; never trusts single-RPC claims.
+
+        Fail closed on unavailable/mismatched evidence. Concentration rejection
+        may use independently reconciled balances, but only a verified complete
+        owner map is eligible to set the production owner-coverage flag.
+        """
+        try:
+            result=await collect_independently_confirmed_owner_evidence(address)
+        except (Exception) as exc:
+            return {"owner_coverage_complete":False,"status":"evidence_exception",
+                    "source":"solana_independent_owner_evidence"}
+        confirmed=(result.get("cross_provider_owner_match") is True
+                   and result.get("positive_balance_coverage_proven") is True
+                   and result.get("status")=="independently_correlated_research")
+        fraction=result.get("largest_owner_fraction")
+        if not confirmed or type(fraction) not in (int,float) or not (0<=fraction<=1):
+            return {"owner_coverage_complete":False,"status":result.get("status","invalid_evidence"),
+                    "source":"solana_independent_owner_evidence"}
+        return {"owner_coverage_complete":True,"top_wallet_fraction":float(fraction),
+                "status":"independently_verified","source":"solana_independent_owner_evidence"}
+
     async def _rpc(self,method,params):
         async with self._lock:
             now=time.monotonic()
