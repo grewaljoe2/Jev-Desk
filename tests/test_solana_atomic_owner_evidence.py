@@ -133,6 +133,29 @@ class AtomicOwnerTests(unittest.TestCase):
         self.assertEqual(limited["status"],"atomic_rpc_or_decode_error")
         self.assertFalse(limited["owner_coverage_complete"])
 
+    def test_maximum_299_accounts_reconcile(self):
+        addresses=[b58encode(i.to_bytes(32,"big")) for i in range(1,300)]
+        batch_sizes=[]
+        def handler(request):
+            call=json.loads(request.content)
+            method=call["method"]
+            if method=="getAccountInfo":
+                result={"context":{"slot":100},"value":mint_value(supply=299)}
+            elif method=="getProgramAccounts":
+                result={"context":{"slot":101},"value":[{"pubkey":a,"account":{}} for a in addresses]}
+            elif method=="getMultipleAccounts":
+                batch=call["params"][0]
+                batch_sizes.append(len(batch))
+                result={"context":{"slot":102},"value":[mint_value(supply=299) if a==MINT else token_value(amount=1) for a in batch]}
+            else:
+                raise AssertionError(method)
+            return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
+        evidence=asyncio.run(collect_atomic_small_mint(MINT,transport=httpx.MockTransport(handler)))
+        self.assertEqual(batch_sizes,[100,100,100])
+        self.assertEqual(evidence["discovered_accounts"],299)
+        self.assertTrue(evidence["positive_balance_coverage_proven"])
+        self.assertFalse(evidence["chain_pass_allowed"])
+
     def test_atomic_account_limit(self):
         result=self.run_case(accounts=300)
         self.assertEqual(result["status"],"atomic_account_limit")
