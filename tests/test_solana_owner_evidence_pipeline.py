@@ -7,14 +7,16 @@ def token(owner,amount,account):
     raw=bytearray(165);raw[:32]=MINT_RAW;raw[32:64]=bytes([owner])*32
     raw[64:72]=amount.to_bytes(8,"little");raw[108]=1
     return {"pubkey":account,"account":{"owner":TOKEN_2022,"data":[base64.b64encode(raw).decode(),"base64"]}}
-def run(*,supply_slot=123,account_slot=123,mint_slot=122,supply="100",program=TOKEN_2022,rate_limit=False):
+def run(*,supply_slot=123,account_slot=123,mint_slot=122,supply="100",program=TOKEN_2022,rate_limit=False,decimals=6):
     calls=[]
     def handler(request):
         data=json.loads(request.content);method=data["method"];calls.append(data)
         if rate_limit:return httpx.Response(429)
-        if method=="getAccountInfo":return httpx.Response(200,json={"result":{"context":{"slot":mint_slot},"value":{"owner":program}}})
+        if method=="getAccountInfo":
+            raw=bytearray(82);raw[36:44]=(100).to_bytes(8,"little");raw[44]=6;raw[45]=1
+            return httpx.Response(200,json={"result":{"context":{"slot":mint_slot},"value":{"owner":program,"data":[base64.b64encode(raw).decode(),"base64"]}}})
         elif method=="getProgramAccounts":return httpx.Response(200,json={"result":{"context":{"slot":account_slot},"value":[token(9,80,"a"),token(8,20,"b")]}})
-        else:return httpx.Response(200,json={"result":{"context":{"slot":supply_slot},"value":{"amount":supply}}})
+        else:return httpx.Response(200,json={"result":{"context":{"slot":supply_slot},"value":{"amount":supply,"decimals":decimals}}})
         return httpx.Response(200,json={"result":{"value":value}})
     result=asyncio.run(collect_owner_evidence(MINT,transport=httpx.MockTransport(handler)))
     return result,calls
@@ -56,6 +58,10 @@ class PipelineTests(unittest.TestCase):
         r,c=run(mint_slot=124)
         self.assertEqual(r["status"],"stale_accounts_snapshot")
         self.assertEqual(len(c),2)
+        self.assertFalse(r["chain_pass_allowed"])
+    def test_wrong_decimals_fail_closed(self):
+        r,c=run(decimals=9)
+        self.assertEqual(r["status"],"invalid_supply")
         self.assertFalse(r["chain_pass_allowed"])
     def test_bad_supply_fails_closed(self):
         r,c=run(supply="not-a-number")
