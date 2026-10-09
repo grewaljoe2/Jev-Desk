@@ -40,3 +40,5 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_solana_chain_worker_canary_integration.py' -v
 
       - run: python -m unittest discover -s tests -p 'test_savip_liquidity_experiment.py' -v
+
+      - run: python -m unittest discover -s tests -p 'test_savip_pool_coverage.py' -v
