@@ -1,5 +1,7 @@
 """Offline fail-closed owner reconciliation; never authorizes CHAIN pass."""
 from collections import defaultdict
+import hashlib
+import json
 from app.research.solana_rpc_owner_decoder import SUPPORTED
 from app.strategy.reference_thresholds import HARD
 
