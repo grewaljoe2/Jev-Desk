@@ -59,7 +59,7 @@ class SavipChainWorker:
                         sf=await self.sol_chain.fetch("solana",address)
                         if sf:
                             d["top_wallet_percent"]=sf.get("top_wallet_fraction")
-                            d["solana_wallet_rpc_status"]="ok"
+                            d["solana_wallet_rpc_status"]="ok" if sf.get("owner_coverage_complete") is True else "unverified_owner_coverage"
                     except RuntimeError as rpc_error:
                         if "solana_rpc_" not in str(rpc_error):raise
                         # The GT dossier is still valid; do not claim the wallet check passed.
