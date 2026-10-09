@@ -1,8 +1,9 @@
 """Offline fail-closed owner reconciliation; never authorizes CHAIN pass."""
 from collections import defaultdict
 from app.research.solana_rpc_owner_decoder import SUPPORTED
+from app.strategy.reference_thresholds import HARD
 
-def reconcile_owner_balances(snapshot, *, mint, program, supply_amount, supply_slot, cap_fraction=0.20):
+def reconcile_owner_balances(snapshot, *, mint, program, supply_amount, supply_slot, cap_fraction=HARD["max_top_wallet"]):
     result = {"status": "invalid_evidence", "owner_coverage_complete": False,
               "chain_pass_allowed": False, "provable_concentration_reject": False}
     if program not in SUPPORTED or not isinstance(mint, str) or not mint:
