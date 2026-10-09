@@ -55,6 +55,18 @@ active_trade_worker=ActiveTradeWorker(provider,seconds=15)
 @app.on_event("startup")
 async def startup():
     await init_db()
+    # Temporary one-shot read-only Helius diagnostic. Remove immediately after capture.
+    import asyncio
+    import logging
+    from app.research.helius_schema_probe import probe as helius_probe
+    async def _helius_once():
+        logging.getLogger("uvicorn.error").warning("HELIUS_PAGINATION_ONESHOT_START")
+        try:
+            result = await helius_probe()
+            logging.getLogger("uvicorn.error").warning("HELIUS_PAGINATION_ONESHOT_RESULT %s", result)
+        except Exception:
+            logging.getLogger("uvicorn.error").warning("HELIUS_PAGINATION_ONESHOT_EXCEPTION redacted")
+    asyncio.create_task(_helius_once())
     scheduler.start()
     # Keep 5m pool qualification: its SNAPSHOT facts feed Savip FREE CUT.
     qualification_worker.start()
