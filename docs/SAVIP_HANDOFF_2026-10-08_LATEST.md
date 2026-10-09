@@ -55,3 +55,10 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - PR #204 merged cde9cc227a7b1fcfb183c1114ce534c1da62f483; CI 37862904641 SUCCESS. Standalone atomic BOOK commit now receives validated fresh observed liquidity and rechecks ticket against it rather than stale Jev dossier liquidity. Malformed evidence/social fail closed. No flags enabled.
 - PR #203 deployment dep-db42pdad0e5s73fjrkig confirmed LIVE at e536b85331345940fe889037bc63e537edbc55d9; app startup complete, GET / HTTP 200.
 - Next: deploy #204 and verify startup, investigate internal-only read-only DB observability, then genuine end-to-end shadow fill and Postgres concurrency tests. Do not change external DB allowlist, enable paid eligibility, or turn on real execution.
+
+## Live verification 2026-10-09 UTC
+- Render dep-db42vkui0phs73eq7qo0 LIVE commit 2108afca3ad49160f3e84c0fb0f96323d746fad5; application startup complete 00:06:23 UTC; GET / HTTP 200 at 00:06:32 UTC.
+- Read-only public /savip-pipeline-diagnostics returned Jev configured=true, BSC SAVIP_JEV event 61601 soft_pass=true at 2026-10-08 23:14:14 UTC, PICK state=no_survivors, shadow entry state=single_entry_disabled, risk=no_open_position, shadow_positions=[].
+- Read-only /savip-shadow-data returned scanned=1000 (UI recent sample, not worker 10000 cohort), FREE=14, TRADE=14 (12 Solana, 2 ETH), CHAIN last cycle checked=0, passed=0; no SAVIP trades. This is a momentary diagnostic snapshot, not a 72h cohort funnel conversion.
+- NEXT: investigate why latest Jev soft pass did not progress to accepted standalone or comparative PICK, while preserving default-disabled paid standalone calls; verify whether a valid candidate is still within 15-minute freshness. Fix upstream Solana wallet owner verification separately and fail closed. Do not enable model calls or fake fills to manufacture conversion.
+- External Render Postgres SQL is blocked by empty IP allowlist; do not weaken DB networking. Internal app read-only diagnostics are accessible.
