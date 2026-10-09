@@ -127,28 +127,47 @@ async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-bet
     try:
         async with httpx.AsyncClient(timeout=timeout,transport=transport) as client:
             for _ in range(3):
+                before=await rpc(client,"getAccountInfo",[mint,{
+                    "encoding":"base64","commitment":"confirmed"}])
+                before_slot=(before.get("context") or {}).get("slot")
+                before_value=before.get("value")
+                before_mint=decode_mint_account(before_value,program=TOKEN_PROGRAM)
+                before_raw=base64.b64decode(before_value["data"][0],validate=True)
+                # Revoked mint authority is essential: supply cannot increase,
+                # and matching bracketing supplies therefore rule out burns.
+                if int.from_bytes(before_raw[:4],"little")!=0:
+                    return {**denied,"status":"mint_authority_open"}
                 discovery=await rpc(client,"getProgramAccounts",[TOKEN_PROGRAM,{
                     "encoding":"base64","commitment":"confirmed","withContext":True,
+                    "minContextSlot":before_slot,
                     "filters":[{"dataSize":165},{"memcmp":{"offset":0,"bytes":mint}}],
                     "dataSlice":{"offset":32,"length":77}}])
                 snapshot=decode_sliced_rpc_snapshot(discovery,mint=mint,
                                                      program=TOKEN_PROGRAM,max_accounts=max_accounts)
                 slot=snapshot["slot"]
-                info=await rpc(client,"getAccountInfo",[mint,{
+                after=await rpc(client,"getAccountInfo",[mint,{
                     "encoding":"base64","commitment":"confirmed",
                     "minContextSlot":slot}])
-                mint_slot=(info.get("context") or {}).get("slot")
-                if type(mint_slot) is not int or mint_slot!=slot:
+                after_slot=(after.get("context") or {}).get("slot")
+                if (type(before_slot) is not int or type(after_slot) is not int
+                    or not (before_slot<=slot<=after_slot)):
                     continue
-                value=info.get("value")
-                mint_data=decode_mint_account(value,program=TOKEN_PROGRAM)
-                raw=base64.b64decode(value["data"][0],validate=True)
+                after_value=after.get("value")
+                after_mint=decode_mint_account(after_value,program=TOKEN_PROGRAM)
+                after_raw=base64.b64decode(after_value["data"][0],validate=True)
+                if (int.from_bytes(after_raw[:4],"little")!=0
+                    or before_mint["amount"]!=after_mint["amount"]
+                    or before_mint["decimals"]!=after_mint["decimals"]
+                    or before_raw[46:50]!=after_raw[46:50]):
+                    return {**denied,"status":"mint_bracket_inconsistent"}
                 outcome=reconcile_owner_balances(snapshot,mint=mint,program=TOKEN_PROGRAM,
-                                                  supply_amount=mint_data["amount"],supply_slot=slot)
+                                                  supply_amount=after_mint["amount"],supply_slot=slot)
                 return {**outcome,"status":"full_sliced_"+str(outcome.get("status")),
-                        "atomic_snapshot_slot":slot,"discovered_accounts":len(snapshot["rows"]),
-                        "mint_authority":int.from_bytes(raw[:4],"little")==1,
-                        "freeze_authority":int.from_bytes(raw[46:50],"little")==1,
+                        "atomic_snapshot_slot":slot,"mint_before_slot":before_slot,
+                        "mint_after_slot":after_slot,
+                        "discovered_accounts":len(snapshot["rows"]),
+                        "mint_authority":False,
+                        "freeze_authority":int.from_bytes(after_raw[46:50],"little")==1,
                         "chain_pass_allowed":False,"owner_coverage_complete":False}
             return {**denied,"status":"full_snapshot_slot_mismatch"}
     except (httpx.HTTPError,ValueError,TypeError,KeyError,IndexError,UnicodeError):
