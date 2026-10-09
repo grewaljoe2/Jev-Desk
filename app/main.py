@@ -45,7 +45,7 @@ async def _helius_one_shot_research():
         helius_research_status={"status":"not_configured","owner_coverage_complete":False,"chain_pass_allowed":False}
         return
     try:
-        result=await collect_cursor_owner_research(mint,api_key=key,max_pages=3,page_size=1000,timeout_seconds=10)
+        result=await collect_cursor_owner_research(mint,api_key=key,max_pages=20,page_size=1000,timeout_seconds=10)
         allowed={"status","pages","token_accounts","unique_owners","accounts_total","slot_stable","first_slot","last_slot"}
         helius_research_status={k:v for k,v in result.items() if k in allowed}
         helius_research_status.update(owner_coverage_complete=False,chain_pass_allowed=False)
