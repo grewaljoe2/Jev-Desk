@@ -36,3 +36,5 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_solana_atomic_owner_evidence.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_dual_atomic_owner_evidence.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_atomic_shadow_promotion.py' -v
+
+      - run: python -m unittest discover -s tests -p 'test_solana_chain_worker_canary_integration.py' -v
