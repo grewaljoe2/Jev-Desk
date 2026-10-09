@@ -66,6 +66,9 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             snapshot=decode_sliced_rpc_snapshot(accounts,mint=mint,program=program,max_accounts=max_accounts)
             if snapshot["slot"] < mint_slot:
                 return {**denied,"status":"stale_accounts_snapshot"}
+            if snapshot["slot"] != mint_slot:
+                return {**denied,"status":"mint_accounts_slot_mismatch",
+                        "mint_slot":mint_slot,"accounts_slot":snapshot["slot"]}
             supply=await request(client,"getTokenSupply",[mint,{"commitment":"confirmed","minContextSlot":snapshot["slot"]}])
             amount=(supply.get("value") or {}).get("amount")
             slot=(supply.get("context") or {}).get("slot")
@@ -107,15 +110,19 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
     if primary_rpc == secondary_rpc:
         return {**denied,"status":"same_provider"}
     first=await collect_owner_evidence(mint,rpc_url=primary_rpc,transport=transport)
-    if first.get("status") in ("snapshot_slot_mismatch","stale_supply_snapshot"):
+    if first.get("status") in ("snapshot_slot_mismatch","stale_supply_snapshot","mint_accounts_slot_mismatch"):
         first=await collect_owner_evidence(mint,rpc_url=primary_rpc,transport=transport)
     if first.get("positive_balance_coverage_proven") is not True:
         return {**denied,"primary_status":first.get("status"),"failed_provider":"primary"}
     second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
-    if second.get("status") in ("snapshot_slot_mismatch","stale_supply_snapshot"):
+    if second.get("status") in ("snapshot_slot_mismatch","stale_supply_snapshot","mint_accounts_slot_mismatch"):
         second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("positive_balance_coverage_proven") is not True:
         return {**denied,"primary_status":first.get("status"),"secondary_status":second.get("status"),"failed_provider":"secondary"}
+    if first.get("accounts_slot") != second.get("accounts_slot"):
+        return {**denied,"status":"cross_provider_slot_mismatch",
+                "primary_snapshot_slot":first.get("accounts_slot"),
+                "secondary_snapshot_slot":second.get("accounts_slot")}
     if first.get("supply_amount") != second.get("supply_amount"):
         return {**denied,"status":"cross_provider_supply_mismatch"}
     digest=first.get("owner_balance_digest")

@@ -53,7 +53,12 @@ class SavipChainProvider:
         except Exception:
             return {"owner_coverage_complete":False,"status":"evidence_exception",
                     "source":"solana_independent_owner_evidence"}
-        confirmed=(result.get("cross_provider_owner_match") is True
+        confirmed=(result.get("chain_pass_allowed") is True
+                   and result.get("owner_coverage_complete") is True
+                   and result.get("cross_provider_owner_match") is True
+                   and result.get("cross_provider_same_slot") is True
+                   and type(result.get("primary_snapshot_slot")) is int
+                   and result.get("primary_snapshot_slot")==result.get("secondary_snapshot_slot")
                    and result.get("positive_balance_coverage_proven") is True
                    and result.get("status")=="independently_correlated_research")
         fraction=result.get("largest_owner_fraction")
@@ -70,6 +75,48 @@ class SavipChainProvider:
         return {"owner_coverage_complete":True,"top_wallet_fraction":float(fraction),
                 "holder_count":holders,"top_10_percent":float(top10),
                 "status":"independently_verified","source":"solana_independent_owner_evidence"}
+
+    async def fetch_atomic_owner_research(self,address):
+        """Bounded dual-RPC canary diagnostics, never CHAIN approval."""
+        from app.research.solana_dual_atomic_owner_evidence import compare_atomic_owner_snapshots
+        try:
+            result=await compare_atomic_owner_snapshots(
+                address,primary_rpc=self.SOL_RPC,secondary_rpc=self.FALLBACK_RPC)
+            return {**result,"chain_pass_allowed":False,"owner_coverage_complete":False}
+        except Exception:
+            return {"status":"atomic_owner_research_exception",
+                    "chain_pass_allowed":False,"owner_coverage_complete":False}
+
+    async def fetch_atomic_shadow_owner_evidence(self,address):
+        """Conservatively promote independently proven classic SPL balances for shadow CHAIN.
+
+        Two independent atomic supply-conserving snapshots must match exactly.
+        Never permits live execution or weakens wallet concentration thresholds.
+        """
+        result=await self.fetch_atomic_owner_research(address)
+        if (result.get("status")!="atomic_independently_correlated_research"
+            or result.get("shadow_owner_evidence_eligible") is not True
+            or result.get("cross_provider_owner_match") is not True
+            or result.get("positive_balance_coverage_proven") is not True
+            or type(result.get("holder_count")) is not int
+            or result["holder_count"]<1
+            or type(result.get("supply_amount")) is not int
+            or result["supply_amount"]<=0
+            or result.get("mint_authority") is not False
+            or result.get("freeze_authority") is not False
+            or not isinstance(result.get("owner_balance_digest"),str)
+            or len(result["owner_balance_digest"])!=64
+            or type(result.get("primary_snapshot_slot")) is not int
+            or type(result.get("secondary_snapshot_slot")) is not int):
+            return {"owner_coverage_complete":False,"status":result.get("status","atomic_unverified")}
+        fraction=result.get("largest_owner_fraction")
+        top10=result.get("top_10_percent")
+        if (type(fraction) not in (int,float) or not (0<=fraction<=1)
+            or type(top10) not in (int,float) or not (0<=top10<=100)):
+            return {"owner_coverage_complete":False,"status":"invalid_atomic_concentration"}
+        return {"owner_coverage_complete":True,"top_wallet_fraction":float(fraction),
+                "holder_count":result["holder_count"],"top_10_percent":float(top10),
+                "status":"atomic_shadow_verified","source":"dual_atomic_classic_spl"}
 
     async def fetch_helius_owner_evidence(self,address):
         """Cross-check Helius owner-map research against an independent supply RPC.

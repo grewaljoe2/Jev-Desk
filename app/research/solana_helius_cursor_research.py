@@ -16,7 +16,7 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
             "source":"helius_rpc_v2_research"}
     if not isinstance(mint,str) or not mint or not isinstance(api_key,str) or not api_key or program not in (TOKEN_PROGRAM,TOKEN_2022):
         return {**denied,"status":"invalid_input"}
-    if type(max_pages) is not int or not 1<=max_pages<=100 or type(page_size) is not int or not 1<=page_size<=1000 or type(max_bytes) is not int or max_bytes<1000:
+    if type(max_pages) is not int or not 1<=max_pages<=100 or type(page_size) is not int or not 1<=page_size<=10000 or type(max_bytes) is not int or max_bytes<1000:
         return {**denied,"status":"invalid_input"}
     cursor=None
     seen_accounts=set()
@@ -68,6 +68,11 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
                     totals.append(total)
                 next_cursor=value["paginationKey"]
                 if next_cursor is None:
+                    if totals and len(set(totals))!=1:
+                        return {**denied,"status":"inconsistent_reported_total","pages":page}
+                    if totals and totals[-1]!=len(seen_accounts):
+                        return {**denied,"status":"reported_total_account_mismatch","pages":page,
+                                "token_accounts":len(seen_accounts),"reported_total":totals[-1]}
                     owner_digest=hashlib.sha256(json.dumps(sorted(owners.items()),separators=(",",":")).encode()).hexdigest()
                     account_digest=hashlib.sha256(json.dumps(sorted((k,*v) for k,v in account_balances.items()),separators=(",",":")).encode()).hexdigest()
                     positive=sorted((x for x in owners.values() if x>0),reverse=True)

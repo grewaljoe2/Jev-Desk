@@ -10,5 +10,6 @@ class Settings:
     db_path:str=os.getenv("DB_PATH","shadow.db")
     database_url:str|None=os.getenv("DATABASE_URL")
     discovery_provider:str=os.getenv("DISCOVERY_PROVIDER","geckoterminal")
+    solana_atomic_canary_enabled:bool=os.getenv("SOLANA_ATOMIC_CANARY_ENABLED","false").strip().lower() in ("1","true","yes")
 settings=Settings()
 if settings.live_execution_enabled:raise RuntimeError("Safety invariant violated: live execution must remain disabled")

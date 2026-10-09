@@ -7,7 +7,7 @@ def token(owner,amount,account):
     raw=bytearray(165);raw[:32]=MINT_RAW;raw[32:64]=bytes([owner])*32
     raw[64:72]=amount.to_bytes(8,"little");raw[108]=1
     return {"pubkey":account,"account":{"owner":TOKEN_2022,"data":[base64.b64encode(raw[32:109]).decode(),"base64"]}}
-def run(*,supply_slot=123,account_slot=123,mint_slot=122,supply="100",program=TOKEN_2022,rate_limit=False,decimals=6):
+def run(*,supply_slot=123,account_slot=123,mint_slot=123,supply="100",program=TOKEN_2022,rate_limit=False,decimals=6):
     calls=[]
     def handler(request):
         data=json.loads(request.content);method=data["method"];calls.append(data)
@@ -30,7 +30,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(r["chain_pass_allowed"])
         self.assertFalse(r["owner_coverage_complete"])
         self.assertEqual(c[1]["params"][0],TOKEN_2022)
-        self.assertEqual(c[1]["params"][1]["minContextSlot"],122)
+        self.assertEqual(c[1]["params"][1]["minContextSlot"],123)
         self.assertEqual(c[1]["params"][1]["dataSlice"],{"offset":32,"length":77})
         self.assertEqual(c[2]["params"][1]["minContextSlot"],123)
     def test_supply_slot_mismatch_fails_closed(self):

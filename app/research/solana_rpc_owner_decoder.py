@@ -61,7 +61,7 @@ def decode_token_account(item, *, mint, program, slot):
     decoded_mint = b58encode(raw[0:32])
     if decoded_mint != mint:
         raise ValueError("mint_mismatch")
-    if raw[108] != 1:
+    if raw[108] not in (1, 2):
         raise ValueError("token_account_not_initialized")
     return {"account": item["pubkey"], "owner": b58encode(raw[32:64]),
             "amount": int.from_bytes(raw[64:72], "little"),
@@ -113,7 +113,7 @@ def decode_sliced_rpc_snapshot(result, *, mint, program, max_accounts=10000):
         try:raw=base64.b64decode(encoded[0],validate=True)
         except (TypeError,ValueError,binascii.Error) as exc:
             raise ValueError("invalid_slice_base64") from exc
-        if len(raw)!=77 or raw[76]!=1:
+        if len(raw)!=77 or raw[76] not in (1, 2):
             raise ValueError("invalid_slice_or_state")
         if item["pubkey"] in seen:raise ValueError("duplicate_token_account")
         seen.add(item["pubkey"])

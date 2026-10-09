@@ -18,6 +18,9 @@ class SavipChainWorker:
             await self._run_cycle_locked()
     async def _run_cycle_locked(self):
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self.last_candidate_results=[];self.last_eligibility={}
+        # Bound the opt-in atomic probe to one candidate per cycle, not one
+        # candidate for the entire uptime of a long-running cloud worker.
+        self._atomic_canary_used=False
         self.cycle_started_at=datetime.now(timezone.utc).isoformat();self.cycle_running=True
         try:
             await self._evaluate_cycle()
@@ -74,7 +77,12 @@ class SavipChainWorker:
                         continue
                     d["solana_wallet_rpc_status"]="pending"
                     try:
-                        sf=await self.sol_chain.fetch("solana",address)
+                        use_canary=(settings.solana_atomic_canary_enabled
+                                    and not getattr(self,"_atomic_canary_used",False))
+                        # The independent canary does not require the optional
+                        # preliminary lower-bound RPC, which may be rate-limited.
+                        sf=({"largest_token_account_fraction":None} if use_canary
+                            else await self.sol_chain.fetch("solana",address))
                         if sf:
                             lower=sf.get("largest_token_account_fraction")
                             if classify_account_lower_bound(lower)=="reject":
@@ -85,7 +93,14 @@ class SavipChainWorker:
                                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"kill","reason":"top_wallet_lower_bound"})
                                 self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
                                 continue
-                            verified=await self.sol_chain.fetch_independent_owner_evidence(address)
+                            if (settings.solana_atomic_canary_enabled
+                                and not getattr(self,"_atomic_canary_used",False)):
+                                # The canary is a single bounded alternative, not an
+                                # additional scan after the legacy expensive collector.
+                                self._atomic_canary_used=True
+                                verified=await self.sol_chain.fetch_atomic_shadow_owner_evidence(address)
+                            else:
+                                verified=await self.sol_chain.fetch_independent_owner_evidence(address)
                             if verified.get("owner_coverage_complete") is True:
                                 d["top_wallet_percent"]=verified["top_wallet_fraction"]
                                 d["holder_count"]=verified["holder_count"]
@@ -142,7 +157,8 @@ class SavipChainWorker:
                 reason_text=str(e)
                 infrastructure=("rate_limited","http_error","rpc_error","response_too_large",
                                 "timeout","transport_error","invalid_rpc_response",
-                                "snapshot_slot_mismatch","stale_supply_snapshot",
+                                "snapshot_slot_mismatch","mint_accounts_slot_mismatch",
+                                "cross_provider_slot_mismatch","stale_supply_snapshot",
                                 "independent_confirmation_unavailable")
                 cooldown=3600.0 if any(x in reason_text for x in infrastructure) else (300.0 if "429" in reason_text else 120.0)
                 self._recent_tokens[row["token_id"]]=time.monotonic()+cooldown
