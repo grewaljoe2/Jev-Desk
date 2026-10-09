@@ -11,35 +11,45 @@ from app.core.config import settings
 class SavipChainWorker:
     def __init__(self,dossier,sol_chain,seconds=60,cap=6,on_pass=None):
         self.dossier=dossier;self.sol_chain=sol_chain;self.seconds=seconds;self.cap=cap;self.on_pass=on_pass;self.task=None
-        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock();self._next_dossier_retry_at=0.0;self.cycle_started_at=None;self.cycle_finished_at=None;self.cycle_running=False;self.last_candidate_results=[];self._recent_tokens={}
+        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self._cycle_lock=asyncio.Lock();self._next_dossier_retry_at=0.0;self.cycle_started_at=None;self.cycle_finished_at=None;self.cycle_running=False;self.last_candidate_results=[];self.last_eligibility={};self._recent_tokens={}
     async def run_cycle(self):
         if self._cycle_lock.locked():return
         async with self._cycle_lock:
             await self._run_cycle_locked()
     async def _run_cycle_locked(self):
-        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self.last_candidate_results=[]
+        self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self.last_candidate_results=[];self.last_eligibility={}
         self.cycle_started_at=datetime.now(timezone.utc).isoformat();self.cycle_running=True
         try:
             await self._evaluate_cycle()
         finally:
             self.cycle_running=False;self.cycle_finished_at=datetime.now(timezone.utc).isoformat()
     async def _evaluate_cycle(self):
-        if await open_savip_positions():return
+        if await open_savip_positions():
+            self.last_eligibility={"blocked_by_open_position":True}
+            return
         # Match the audited 72h cohort; provider calls remain capped by self.cap.
         funnel=await savip_candidate_pool(window_minutes=72*60,limit=10000)
         trade=await exact_trade_cut(funnel["free_cut_survivors"])
         if time.monotonic()<self._next_dossier_retry_at:
+            self.last_eligibility={"trade_survivors":len(trade["survivors"]),"dossier_cooldown":True}
             self.last_error="dossier_provider_cooldown";return
         now=time.monotonic()
         self._recent_tokens={k:v for k,v in self._recent_tokens.items() if v>now}
         persisted_recent=await savip_recent_chain_tokens(hours=24)
         fresh=[row for row in trade["survivors"] if row["token_id"] not in self._recent_tokens and row["token_id"] not in persisted_recent]
+        self.last_eligibility={"free_survivors":len(funnel["free_cut_survivors"]),
+            "trade_survivors":len(trade["survivors"]),
+            "persisted_recent_skips":sum(row["token_id"] in persisted_recent for row in trade["survivors"]),
+            "in_memory_cooldown_skips":sum(row["token_id"] not in persisted_recent and row["token_id"] in self._recent_tokens for row in trade["survivors"]),
+            "fresh_candidates":len(fresh)}
         # Prioritize freshest qualified pools within the existing shared GT pacing budget.
         fresh.sort(key=lambda row: (float(row.get("age_minutes") or 1e12),row.get("token_id") or ""))
         eligible=[row for row in fresh if row.get("chain")!="solana" or not self.sol_chain.cooling_down()]
         # Favor checks that do not depend on the constrained public Solana RPC.
         # Retain youngest-first priority within each network group.
         eligible.sort(key=lambda row: (row.get("chain")=="solana", float(row.get("age_minutes") or 1e12), row.get("token_id") or ""))
+        self.last_eligibility["solana_rpc_cooldown_skips"]=len(fresh)-len(eligible)
+        self.last_eligibility["selected_for_checks"]=min(len(eligible),self.cap)
         for row in eligible[:self.cap]:
             if row.get("chain")=="solana" and self.sol_chain.cooling_down():
                 continue
