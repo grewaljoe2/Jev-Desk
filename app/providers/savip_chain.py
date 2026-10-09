@@ -72,21 +72,45 @@ class SavipChainProvider:
                 "status":"independently_verified","source":"solana_independent_owner_evidence"}
 
     async def fetch_helius_owner_evidence(self,address):
-        """Bounded real-candidate Helius scan. Diagnostic only, never a wallet pass."""
+        """Cross-check Helius owner-map research against an independent supply RPC.
+
+        This is a bounded diagnostic, not independent owner-map certification.
+        No evidence from this method may authorize a CHAIN pass.
+        """
         from app.research.solana_helius_cursor_research import collect_cursor_owner_research
         key=os.environ.get("HELIUS_API_KEY")
-        if not key:
-            return {"status":"helius_not_configured","owner_coverage_complete":False}
+        denied={"owner_coverage_complete":False,"chain_pass_allowed":False}
+        if not key:return {**denied,"status":"helius_not_configured"}
         try:
             result=await collect_cursor_owner_research(address,api_key=key,max_pages=20,
                                                        page_size=1000,timeout_seconds=10)
-            return {"status":result.get("status","invalid_evidence"),
-                    "token_accounts":result.get("token_accounts"),
-                    "holder_count":result.get("holder_count"),
-                    "slot_stable":result.get("slot_stable"),
-                    "owner_coverage_complete":False}
+            summary={**denied,"status":result.get("status","invalid_evidence"),
+                     "token_accounts":result.get("token_accounts"),
+                     "holder_count":result.get("holder_count"),
+                     "slot_stable":result.get("slot_stable")}
+            if result.get("status")!="cursor_exhausted_unverified":
+                return summary
+            async with httpx.AsyncClient(timeout=10) as client:
+                response=await client.post(self.FALLBACK_RPC,json={
+                    "jsonrpc":"2.0","id":1,"method":"getTokenSupply",
+                    "params":[address,{"commitment":"confirmed"}]})
+                response.raise_for_status()
+                payload=response.json()
+            if payload.get("error") or not isinstance(payload.get("result"),dict):
+                return {**summary,"status":"independent_supply_unavailable"}
+            value=payload["result"].get("value") or {}
+            amount=value.get("amount")
+            slot=(payload["result"].get("context") or {}).get("slot")
+            if not isinstance(amount,str) or not amount.isdecimal() or type(slot) is not int:
+                return {**summary,"status":"invalid_independent_supply"}
+            if int(amount)!=result.get("accounts_total"):
+                return {**summary,"status":"independent_supply_mismatch"}
+            return {**summary,"status":"independent_supply_matches_non_atomic",
+                    "independent_supply_slot":slot,
+                    "largest_owner_fraction":result.get("largest_owner_amount",0)/int(amount) if int(amount)>0 else None,
+                    "top_10_percent":100*result.get("top_10_owner_amount",0)/int(amount) if int(amount)>0 else None}
         except Exception:
-            return {"status":"helius_evidence_exception","owner_coverage_complete":False}
+            return {**denied,"status":"helius_evidence_exception"}
 
     async def _rpc(self,method,params):
         async with self._lock:
