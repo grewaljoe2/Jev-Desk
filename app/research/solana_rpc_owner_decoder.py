@@ -86,3 +86,38 @@ def decode_rpc_snapshot(result, *, mint, program, max_accounts=10000):
         seen.add(row["account"])
         rows.append(row)
     return {"slot": slot, "rows": rows, "owner_coverage_complete": False}
+
+def decode_sliced_rpc_snapshot(result, *, mint, program, max_accounts=10000):
+    """Decode 77-byte owner/amount/state slice; mint identity enforced by RPC memcmp.
+
+    Never assert completeness from a slice. Reject ambiguous data and duplicates.
+    """
+    if not isinstance(result,dict) or not isinstance(result.get("context"),dict):
+        raise ValueError("missing_context")
+    slot=result["context"].get("slot")
+    if type(slot) is not int or slot<0:raise ValueError("invalid_context_slot")
+    values=result.get("value")
+    if not isinstance(values,list) or len(values)>max_accounts:
+        raise ValueError("invalid_or_oversize_response")
+    seen=set()
+    rows=[]
+    for item in values:
+        if not isinstance(item,dict) or not isinstance(item.get("pubkey"),str):
+            raise ValueError("missing_account_identity")
+        account=item.get("account")
+        if not isinstance(account,dict) or account.get("owner")!=program:
+            raise ValueError("wrong_token_program")
+        encoded=account.get("data")
+        if not isinstance(encoded,list) or len(encoded)!=2 or encoded[1]!="base64":
+            raise ValueError("missing_slice_base64")
+        try:raw=base64.b64decode(encoded[0],validate=True)
+        except (TypeError,ValueError,binascii.Error) as exc:
+            raise ValueError("invalid_slice_base64") from exc
+        if len(raw)!=77 or raw[76]!=1:
+            raise ValueError("invalid_slice_or_state")
+        if item["pubkey"] in seen:raise ValueError("duplicate_token_account")
+        seen.add(item["pubkey"])
+        rows.append({"account":item["pubkey"],"owner":b58encode(raw[:32]),
+                     "amount":int.from_bytes(raw[32:40],"little"),
+                     "mint":mint,"program":program,"slot":slot})
+    return {"slot":slot,"rows":rows,"owner_coverage_complete":False}
