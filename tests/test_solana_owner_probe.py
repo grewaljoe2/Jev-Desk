@@ -35,6 +35,7 @@ class OwnerProbeTests(unittest.TestCase):
         self.assertEqual(result["token_accounts"],1)
         self.assertEqual(len(calls),1)
         self.assertEqual(calls[0]["method"],"getProgramAccounts")
+        self.assertIn({"dataSize":165}, calls[0]["params"][1]["filters"])
     def test_rate_limit_no_retry(self):
         calls=[]
         def handler(request):
