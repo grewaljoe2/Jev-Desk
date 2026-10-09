@@ -87,3 +87,9 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Executed `python -m unittest discover -s tests -v` in `/mnt/data/jev_offline` after updating local equivalents of both newly committed retry cases and the local retry allowlist. Result: **23 tests, 23 passed**.
 - **Provenance:** local files are reconstructed/minimal equivalents, not exact GitHub checkout; this does not establish full repository integration, real provider consistency, or wallet ownership completeness.
 - Remaining concern: `SavipChainProvider` promotes `independently_correlated_research` to `owner_coverage_complete=True` despite research collector returning `chain_pass_allowed=False`. Before production release, the evidence trust boundary needs an explicit, independently substantiated approval contract rather than treating correlation alone as certification. No merge or deploy.
+
+## Research-to-production approval boundary
+- Commit `848778b` hardens `SavipChainProvider.fetch_independent_owner_evidence`: `owner_coverage_complete=True` now additionally requires explicit `chain_pass_allowed=True` **and** `owner_coverage_complete=True` from the evidence collector, not merely `independently_correlated_research`.
+- Current `collect_independently_confirmed_owner_evidence` intentionally returns both flags False, so this change **blocks** the former research-only promotion. This is safety correction, **not a working verification solution**.
+- Commit `8f4c55c` updates mocked provider tests: research correlation denied, one approval flag insufficient, explicit flags + valid evidence positive control. **New test expectations not execution-verified.**
+- Do not merge until real independent owner-coverage contract is established and full-source integration passes.
