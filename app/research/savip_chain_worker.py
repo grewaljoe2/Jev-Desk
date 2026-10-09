@@ -108,7 +108,8 @@ class SavipChainWorker:
                 if d.get("solana_wallet_rpc_status")=="unavailable_rpc_error":
                     raise RuntimeError("solana_wallet_check_pending_unverified: "+d.get("solana_wallet_rpc_error","unknown"))
                 if row["chain"]=="solana" and d.get("solana_wallet_rpc_status")!="ok":
-                    raise RuntimeError("solana_wallet_check_pending_unverified")
+                    evidence_status=str(d.get("solana_owner_evidence_status") or d.get("solana_wallet_rpc_status") or "unknown")
+                    raise RuntimeError("solana_wallet_check_pending_unverified: "+evidence_status[:80])
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing,"top_10_percent":d.get("top_10_percent"),"holder_count":d.get("holder_count"),"top_wallet_percent":d.get("top_wallet_percent"),"top_10_limit_percent":60.0,"dossier_source":d.get("source")})
