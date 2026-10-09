@@ -61,3 +61,8 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Executed `cd /mnt/data/jev_offline && python -m unittest discover -s tests -p 'test_helius_collector_rpc.py' -v` after adding local equivalents of the two new GitHub tests. Result: **13 tests run, 13 passed** (0.009 seconds).
 - **Important provenance limitation:** local collector and test files were manually reconstructed from connector-fetched repository source; the local test names/format differ from the committed GitHub test file. This is **not** a byte-identical Git checkout or GitHub CI run, and does not validate the full CHAIN worker or prove a complete consistent owner snapshot.
 - No merge or deployment; release gate remains blocked.
+
+## Independent RPC owner-correlation slot guard
+- Source audit found `collect_independently_confirmed_owner_evidence` accepted identical owner digests from different `accounts_slot` values, and `SavipChainProvider.fetch_independent_owner_evidence` could then mark `owner_coverage_complete=True`. This is an actual possible false-positive route (matching digest does not certify simultaneous snapshot).
+- Research commit `00706bbc` now rejects different account slots with `cross_provider_slot_mismatch` before promoting correlation. Regression test file `tests/test_solana_independent_owner_slots.py` committed as `d238ba67` with 3 mocked scenarios. **These 3 tests are not yet execution-verified.**
+- Important remaining gap: `collect_owner_evidence` reads mint at a prior slot and only checks account/supply slot equality; `minContextSlot` is not snapshot pinning. Provider independence and completeness also remain unresolved. No release authorization.
