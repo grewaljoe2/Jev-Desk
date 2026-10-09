@@ -2,6 +2,7 @@
 import asyncio
 import time
 import httpx
+from app.research.solana_owner_evidence_pipeline import collect_independently_confirmed_owner_evidence
 
 class SavipChainProvider:
     SOL_RPC="https://api.mainnet-beta.solana.com"
