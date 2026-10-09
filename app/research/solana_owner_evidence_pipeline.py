@@ -41,18 +41,23 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             if not isinstance(value,dict) or value.get("owner") not in SUPPORTED:
                 return {**denied,"status":"unsupported_or_missing_mint"}
             program=value["owner"]
+            mint_slot=(info.get("context") or {}).get("slot")
+            if type(mint_slot) is not int or mint_slot < 0:
+                return {**denied,"status":"invalid_mint_slot"}
             filters=[{"memcmp":{"offset":0,"bytes":mint}}]
             if program==TOKEN_PROGRAM:
                 filters.insert(0,{"dataSize":165})
-            accounts=await request(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"filters":filters}])
+            accounts=await request(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"minContextSlot":mint_slot,"filters":filters}])
             snapshot=decode_rpc_snapshot(accounts,mint=mint,program=program,max_accounts=max_accounts)
+            if snapshot["slot"] < mint_slot:
+                return {**denied,"status":"stale_accounts_snapshot"}
             supply=await request(client,"getTokenSupply",[mint,{"commitment":"confirmed","minContextSlot":snapshot["slot"]}])
             amount=(supply.get("value") or {}).get("amount")
             slot=(supply.get("context") or {}).get("slot")
             if not isinstance(amount,str) or not amount.isdecimal():
                 return {**denied,"status":"invalid_supply"}
             outcome=reconcile_owner_balances(snapshot,mint=mint,program=program,supply_amount=int(amount),supply_slot=slot)
-            return {**outcome,"mint_program":program,"accounts_slot":snapshot["slot"],"supply_slot":slot}
+            return {**outcome,"mint_program":program,"mint_slot":mint_slot,"accounts_slot":snapshot["slot"],"supply_slot":slot}
     except (httpx.TimeoutException,asyncio.TimeoutError):
         return {**denied,"status":"timeout"}
     except httpx.HTTPError:
