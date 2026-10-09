@@ -66,3 +66,8 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Source audit found `collect_independently_confirmed_owner_evidence` accepted identical owner digests from different `accounts_slot` values, and `SavipChainProvider.fetch_independent_owner_evidence` could then mark `owner_coverage_complete=True`. This is an actual possible false-positive route (matching digest does not certify simultaneous snapshot).
 - Research commit `00706bbc` now rejects different account slots with `cross_provider_slot_mismatch` before promoting correlation. Regression test file `tests/test_solana_independent_owner_slots.py` committed as `d238ba67` with 3 mocked scenarios. **These 3 tests are not yet execution-verified.**
 - Important remaining gap: `collect_owner_evidence` reads mint at a prior slot and only checks account/supply slot equality; `minContextSlot` is not snapshot pinning. Provider independence and completeness also remain unresolved. No release authorization.
+
+## CHAIN provider defense in depth
+- Commit `9a6263d` requires `cross_provider_same_slot=True`, integer primary snapshot slot, and equal primary/secondary snapshot slots at the `SavipChainProvider` acceptance boundary; protects against forged/incomplete correlation result.
+- Commit `445cb31` adds five mocked provider-boundary tests (positive control and four fail-closed scenarios). **Tests committed, not executed in this turn.**
+- This still does not prove actual RPC completeness or atomicity. No production release approval.
