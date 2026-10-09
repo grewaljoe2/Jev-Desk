@@ -31,3 +31,38 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_solana_pending_diagnostics.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_rpc_owner_decoder.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_owner_probe.py' -v
+      - name: TEMP Token-2022 balances versus supply
+        run: |
+          python - <<'PY'
+          import asyncio, json, httpx
+          from app.research.solana_rpc_owner_decoder import TOKEN_2022, decode_rpc_snapshot
+          mint="2JxdiEFs3K8tVtWp4Q3SK6RGNwLJaRRNmX63y3Xnpump"
+          async def main():
+              async with httpx.AsyncClient(timeout=12) as client:
+                  async def rpc(method,params):
+                      r=await client.post("https://api.mainnet-beta.solana.com",json={"jsonrpc":"2.0","id":1,"method":method,"params":params})
+                      return r.status_code,r.json()
+                  status,accounts=await rpc("getProgramAccounts",[TOKEN_2022,{"encoding":"base64","commitment":"confirmed","withContext":True,"filters":[{"memcmp":{"offset":0,"bytes":mint}}]}])
+                  out={"accounts_http":status,"owner_coverage_complete":False}
+                  if status==200 and "result" in accounts:
+                      snapshot=decode_rpc_snapshot(accounts["result"],mint=mint,program=TOKEN_2022,max_accounts=5000)
+                      balances={}
+                      for row in snapshot["rows"]:
+                          balances[row["owner"]]=balances.get(row["owner"],0)+row["amount"]
+                      out.update({"accounts_slot":snapshot["slot"],"account_count":len(snapshot["rows"]),"unique_owners":len(balances),"account_amount_sum":sum(balances.values()),"largest_owner_amount":max(balances.values(),default=0)})
+                  else:
+                      out["accounts_error"]=accounts.get("error")
+                  status,supply=await rpc("getTokenSupply",[mint,{"commitment":"confirmed"}])
+                  out["supply_http"]=status
+                  value=(supply.get("result") or {}).get("value") or {}
+                  if value.get("amount") is not None:
+                      out["supply_amount"]=int(value["amount"])
+                      out["supply_slot"]=(supply.get("result") or {}).get("context",{}).get("slot")
+                      if "account_amount_sum" in out:
+                          out["amounts_match"]=out["account_amount_sum"]==out["supply_amount"]
+                  else:
+                      out["supply_error"]=supply.get("error")
+                  print("OWNER_RECONCILE="+json.dumps(out,sort_keys=True),flush=True)
+                  assert out["owner_coverage_complete"] is False
+          asyncio.run(main())
+          PY
