@@ -93,7 +93,7 @@ class SavipChainWorker:
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
                 await self._record_attempt(row.get("token_id"),self.last_error)
-                self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) else "error","reason":self.last_error})
+                self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) or "pending_unverified" in str(e) else "error","reason":self.last_error})
                 if "429" in str(e):
                     self._recent_tokens[row["token_id"]]=time.monotonic()+300.0
                 else:
