@@ -51,6 +51,18 @@ class HeliusCollectorRPCTests(unittest.TestCase):
     def test_token_2022_diagnostic_only(self):
         r,_=self.collect([page(100,[acct("A",1,40,TOKEN_2022)],None)],program=TOKEN_2022)
         self.assertEqual(r["status"],"cursor_exhausted_unverified")
+    def test_inconsistent_total_results_rejected(self):
+        a=page(100,[acct("A",1,40)],"next")
+        b=page(101,[acct("B",2,60)],None)
+        a["result"]["value"]["totalResults"]=2
+        b["result"]["value"]["totalResults"]=3
+        r,_=self.collect([a,b])
+        self.assertEqual(r["status"],"inconsistent_reported_total")
+    def test_exhausted_cursor_with_missing_accounts_rejected(self):
+        a=page(100,[acct("A",1,40)],None)
+        a["result"]["value"]["totalResults"]=2
+        r,_=self.collect([a])
+        self.assertEqual(r["status"],"reported_total_account_mismatch")
     def test_research_page_size_10000(self):
         r,_=self.collect([page(100,[acct("A",1,40)],None)],page_size=10000)
         self.assertEqual(r["status"],"cursor_exhausted_unverified")
