@@ -58,6 +58,7 @@ class SavipChainWorker:
                 continue
             self.last_checked+=1
             verifier_path="not_started"
+            evidence_details={}
             try:
                 # Token IDs are canonical chain:address; the FREE/TRADE SQL projection
                 # does not guarantee a standalone address key.
@@ -116,6 +117,7 @@ class SavipChainWorker:
                                 d["solana_owner_primary_status"]=verified.get("primary_status")
                                 d["solana_owner_secondary_status"]=verified.get("secondary_status")
                                 d["solana_owner_failed_provider"]=verified.get("failed_provider")
+                                evidence_details={key:verified.get(key) for key in ("status","primary_status","secondary_status","failed_provider","source") if verified.get(key) is not None}
                                 # Helius can supply bounded candidate diagnostics when public
                                 # providers cannot attest a complete wallet map. Its
                                 # multi-slot cursor scan is NEVER accepted as a CHAIN pass.
@@ -151,7 +153,7 @@ class SavipChainWorker:
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
-                await self._record_attempt(row.get("token_id"),self.last_error,verifier_path)
+                await self._record_attempt(row.get("token_id"),self.last_error,verifier_path,evidence_details)
                 self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) or "pending_unverified" in str(e) else "error","reason":self.last_error})
                 # Provider capability/coverage failures cannot be fixed by a two-minute retry.
                 # Avoid hammering public RPCs with the same token while preserving
@@ -172,12 +174,12 @@ class SavipChainWorker:
                     # dossier requests while its global 429 cooldown runs.
                     self._next_dossier_retry_at=time.monotonic()+120.0
                     break
-    async def _record_attempt(self,token_id,reason,verifier_path="unknown"):
+    async def _record_attempt(self,token_id,reason,verifier_path="unknown",evidence_details=None):
         if not settings.database_url or not token_id:return
         try:
             import psycopg,json
             async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-                await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES(%s,%s,%s,%s::jsonb,CURRENT_TIMESTAMP)",("SAVIP_CHAIN_ATTEMPT",token_id,"savip_reference",json.dumps({"reason":reason[:200],"verifier_path":verifier_path})))
+                await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES(%s,%s,%s,%s::jsonb,CURRENT_TIMESTAMP)",("SAVIP_CHAIN_ATTEMPT",token_id,"savip_reference",json.dumps({"reason":reason[:200],"verifier_path":verifier_path,"evidence":evidence_details or {}})))
                 await db.commit()
         except Exception:
             pass
