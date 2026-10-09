@@ -6,7 +6,7 @@ MINT=b58encode(MINT_RAW)
 def token(owner,amount,account):
     raw=bytearray(165);raw[:32]=MINT_RAW;raw[32:64]=bytes([owner])*32
     raw[64:72]=amount.to_bytes(8,"little");raw[108]=1
-    return {"pubkey":account,"account":{"owner":TOKEN_2022,"data":[base64.b64encode(raw).decode(),"base64"]}}
+    return {"pubkey":account,"account":{"owner":TOKEN_2022,"data":[base64.b64encode(raw[32:109]).decode(),"base64"]}}
 def run(*,supply_slot=123,account_slot=123,mint_slot=122,supply="100",program=TOKEN_2022,rate_limit=False,decimals=6):
     calls=[]
     def handler(request):
@@ -31,6 +31,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(r["owner_coverage_complete"])
         self.assertEqual(c[1]["params"][0],TOKEN_2022)
         self.assertEqual(c[1]["params"][1]["minContextSlot"],122)
+        self.assertEqual(c[1]["params"][1]["dataSlice"],{"offset":32,"length":77})
         self.assertEqual(c[2]["params"][1]["minContextSlot"],123)
     def test_supply_slot_mismatch_fails_closed(self):
         r,c=run(supply_slot=124)
@@ -44,7 +45,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(r["supply_slot"],122)
     def test_supply_mismatch_fails_closed(self):
         r,c=run(supply="101")
-        self.assertEqual(r["status"],"supply_mismatch")
+        self.assertEqual(r["status"],"mint_supply_mismatch")
         self.assertFalse(r["chain_pass_allowed"])
     def test_unsupported_program_stops_early(self):
         r,c=run(program="unsupported")
