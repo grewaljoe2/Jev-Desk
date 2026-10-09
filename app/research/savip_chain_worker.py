@@ -18,6 +18,9 @@ class SavipChainWorker:
             await self._run_cycle_locked()
     async def _run_cycle_locked(self):
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self.last_candidate_results=[];self.last_eligibility={}
+        # Bound the opt-in atomic probe to one candidate per cycle, not one
+        # candidate for the entire uptime of a long-running cloud worker.
+        self._atomic_canary_used=False
         self.cycle_started_at=datetime.now(timezone.utc).isoformat();self.cycle_running=True
         try:
             await self._evaluate_cycle()
