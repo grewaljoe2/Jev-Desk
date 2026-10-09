@@ -101,3 +101,9 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 ## CHAIN worker infrastructure cooldown
 - Commit `7e6a082` classifies `mint_accounts_slot_mismatch` and `cross_provider_slot_mismatch` alongside existing `snapshot_slot_mismatch` infrastructure statuses, so affected candidates receive the worker's 3600-second cooldown rather than 120 seconds. This avoids repeating costly checks during provider inconsistency.
 - Source-level change is committed but no exact-source worker integration test has been executed. No production merge/deploy and no complete owner proof.
+
+## Root-cause review: impossible-to-rely-on sequential slot equality
+- Inspected exact `app/research/solana_owner_evidence_pipeline.py` on branch. `collect_owner_evidence` issues sequential `getAccountInfo`, `getProgramAccounts`, `getTokenSupply`, demanding `mint_slot == accounts_slot == supply_slot`; `collect_independently_confirmed_owner_evidence` then demands both providers return identical account slots. On live Solana this is a stringent temporal coincidence, not a reproducible snapshot contract. `minContextSlot` only sets a lower bound, not an exact slot pin.
+- Current research collector explicitly denies `chain_pass_allowed` and `owner_coverage_complete`; provider now correctly refuses promotion. As written, **no positive CHAIN authorization path exists**. This is safer than a false pass but is not a functional wallet verifier.
+- Recommended next engineering design: select a provider/API that explicitly supports a single coherent snapshot of mint supply plus full token-account owner map (or verifiable historical state at a chosen slot); validate completeness and provider trust, and test with actual full-source integration. Do not weaken concentration limits, invent slot pinning via `minContextSlot`, or reinterpret cursor page totals as completeness proof.
+- No production rollout or live verification performed during this review.
