@@ -20,6 +20,7 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
     seen_accounts=set()
     owners={}
     slots=[]
+    totals=[]
     seen_cursors=set()
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds,transport=transport) as client:
@@ -59,17 +60,27 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
                 total=value.get("totalResults")
                 if total is not None and (type(total) is not int or total<0):
                     return {**denied,"status":"invalid_total_results","pages":page}
+                if total is not None:
+                    totals.append(total)
                 next_cursor=value["paginationKey"]
                 if next_cursor is None:
                     return {**denied,"status":"cursor_exhausted_unverified","pages":page,
                             "token_accounts":len(seen_accounts),"unique_owners":len(owners),
                             "accounts_total":sum(owners.values()),"slot_stable":len(set(slots))==1,
-                            "first_slot":slots[0],"last_slot":slots[-1]}
+                            "first_slot":slots[0],"last_slot":slots[-1],
+                            "reported_total_min":min(totals) if totals else None,
+                            "reported_total_max":max(totals) if totals else None,
+                            "reported_total_stable":len(set(totals))==1 if totals else None}
                 if not isinstance(next_cursor,str) or not next_cursor or next_cursor in seen_cursors:
                     return {**denied,"status":"invalid_cursor","pages":page}
                 seen_cursors.add(next_cursor)
                 cursor=next_cursor
             return {**denied,"status":"page_cap_reached","pages":max_pages,"token_accounts":len(seen_accounts),
-                    "slot_stable":len(set(slots))==1}
+                    "slot_stable":len(set(slots))==1,
+                    "first_slot":slots[0] if slots else None,
+                    "last_slot":slots[-1] if slots else None,
+                    "reported_total_min":min(totals) if totals else None,
+                    "reported_total_max":max(totals) if totals else None,
+                    "reported_total_stable":len(set(totals))==1 if totals else None}
     except httpx.TimeoutException:return {**denied,"status":"timeout"}
     except (httpx.HTTPError,ValueError,TypeError,KeyError):return {**denied,"status":"invalid_provider_data"}
