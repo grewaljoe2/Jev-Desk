@@ -24,10 +24,12 @@ async def probe():
         return {"status": "missing_credential", "chain_pass_allowed": False}
     results = []
     for mint in MINTS:
-        result = await collect_indexed_owner_research(
-            mint, api_key=key, max_pages=3, page_size=100,
-            timeout_seconds=8, max_response_bytes=500_000)
-        results.append({"mint": mint, **{field: result[field] for field in FIELDS if field in result}})
+        for page_size in (50, 100):
+            result = await collect_indexed_owner_research(
+                mint, api_key=key, max_pages=3, page_size=page_size,
+                timeout_seconds=8, max_response_bytes=500_000)
+            results.append({"mint": mint, "requested_page_size": page_size,
+                            **{field: result[field] for field in FIELDS if field in result}})
     return {"status": "research_only", "results": results,
             "chain_pass_allowed": False}
 
