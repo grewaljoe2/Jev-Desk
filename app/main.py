@@ -40,7 +40,7 @@ async def _helius_one_shot_research():
     global helius_research_status
     from app.research.solana_helius_cursor_research import collect_cursor_owner_research
     key=os.environ.get("HELIUS_API_KEY","")
-    mint=os.environ.get("HELIUS_RESEARCH_MINT","")
+    mint=os.environ.get("HELIUS_RESEARCH_MINT","6Mix12LiHrQFojaQEnfPUC65Qkwd6X4Y5Qg93oFbordr")
     if not key or not mint:
         helius_research_status={"status":"not_configured","owner_coverage_complete":False,"chain_pass_allowed":False}
         return
