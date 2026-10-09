@@ -227,6 +227,18 @@ async def savip_shadow_data():
         trade_by_chain[network]=trade_by_chain.get(network,0)+1
     return {"ok":True,"mode":"savip_trade_cut_shadow_v1","minimum_age_minutes":60,"minimum_liquidity_usd":25000,"free_cut_by_chain":chain_funnel,"trade_cut_by_chain":trade_by_chain,"chain_results_by_network":chain_rejections,"momentum_m5_status":"observation_only_no_new_gate","candidate_source":"fresh_discovery","scanned":funnel["scanned"],"scan_sample_limit":1000,"scan_metric_definition":"most_recent_1000_unique_discovered_tokens_in_72h","free_cut_survivor_count":len(survivors),"wait_too_young_count":len(funnel["wait_too_young"]),"kills":funnel["kills"],"missing_fields":funnel.get("missing_fields",{}),"free_cut_survivors":survivors[:25],"trade_cut_survivor_count":len(trade["survivors"]),"trade_cut_kills":trade["kills"],"trade_cut_missing_fields":trade["missing_fields"],"trade_cut_survivors":trade["survivors"][:25],"dossier_cap_per_cycle":savip_chain_worker.cap,"trade_cut_enabled":True,"dossier_enabled":True,"chain_cut_enabled":True,"chain_cut":{"checked_last_cycle":savip_chain_worker.last_checked,"passed_last_cycle":savip_chain_worker.last_passed,"kills":savip_chain_worker.last_kills,"last_error":savip_chain_worker.last_error,"eligibility":savip_chain_worker.last_eligibility,"cycle_running":savip_chain_worker.cycle_running,"cycle_started_at":savip_chain_worker.cycle_started_at,"cycle_finished_at":savip_chain_worker.cycle_finished_at,"candidate_results":savip_chain_worker.last_candidate_results,"recent_persisted_decisions":await recent_savip_chain_decisions(50),"cooldown_remaining_seconds_by_token":{token:round(max(0,until-__import__("time").monotonic())) for token,until in savip_chain_worker._recent_tokens.items() if until>__import__("time").monotonic()}},"savip_trades":await savip_positions_detail(25),"entry_state":savip_shadow_entry_worker.state,"risk_state":savip_shadow_risk_worker.state,"jev_enabled":typesafe_jev.configured,"jev_state":{"checked_last_cycle":savip_jev_worker.last_checked,"passed_last_cycle":savip_jev_worker.last_passed,"last_error":savip_jev_worker.last_error},"jev_recent_outcomes":await recent_savip_jev_outcomes(10),"pick_enabled":True,"pick_state":"armed_waiting","dex_enrichment":{"checked_last_cycle":savip_dex_worker.last_checked,"enriched_last_cycle":savip_dex_worker.last_enriched,"last_error":savip_dex_worker.last_error},"real_execution_enabled":False}
 
+@app.get("/savip-pool-coverage-research")
+async def savip_pool_coverage_research():
+    """Bounded, read-only observed pool evidence; not a completeness claim."""
+    from app.research.savip_pool_coverage import summarize_pool_coverage
+    observed=list(provider._research_history.values()) if hasattr(provider,"_research_history") else []
+    summary=summarize_pool_coverage(observed)
+    return {"ok":True,"shadow_only":True,"live_execution_enabled":False,
+            "coverage_scope":"sampled_page_one_trending_and_new_pools_not_dex_complete",
+            "observation_limit":500,"observed_pools":summary["observed_pools"],
+            "unique_tokens":summary["unique_tokens"],"dex_counts":summary["dex_counts"],
+            "tokens":summary["tokens"][:100]}
+
 @app.get("/savip-discovery-accounting")
 async def savip_discovery_accounting_data():
     return {"ok":True,"discovery":await savip_discovery_accounting(),"shadow_only":True,"live_execution_enabled":False}
