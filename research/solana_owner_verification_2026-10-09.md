@@ -31,3 +31,9 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 3. Implement a verifier that passes the suite while retaining hard thresholds and fail-closed behavior.
 4. Run CHAIN → Jev → PICK → SIZE → FILLS → RISK → BOOK shadow-only regression tests and audit controls.
 5. Only then consider PR, CI, merge, deployment, and live end-to-end verification. If evidence is unavailable, report architectural blocker, not a fix.
+
+## 2026-10-09 independent execution checkpoint
+- Executed `/mnt/data/solana_owner_release_gate_tests.py` in the working Python environment: **6/6 synthetic checks PASS**. This is the locally mounted script, not the GitHub test file.
+- Retrieved and inspected committed `tests/test_solana_owner_snapshot_adversarial.py`; it contains six `unittest` test methods, but its execution has **not** been verified in CI. GitHub returned no workflow runs for commit `c6dd0c93061cf37c010712ef617bb6648dcc9255`.
+- The tests currently demonstrate *counterexamples only* and are not wired to exercise `collect_cursor_owner_research`, `SavipChainProvider`, or `SavipChainWorker`. The mandatory integration/offline verifier release gate is **NOT MET**.
+- Do not misreport the local standalone script's pass as GitHub CI or production implementation validation.
