@@ -31,7 +31,21 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
                     raise ValueError("response_too_large")
                 chunks.append(chunk)
         body=json.loads(b"".join(chunks))
-        if not isinstance(body,dict) or body.get("error") or not isinstance(body.get("result"),dict):
+        if not isinstance(body,dict):
+            raise ValueError("invalid_rpc_response")
+        error=body.get("error")
+        if isinstance(error,dict):
+            code=error.get("code")
+            if code == -32005:
+                raise ValueError("rpc_node_unhealthy")
+            if code == -32601:
+                raise ValueError("rpc_method_unsupported")
+            if code == -32602:
+                raise ValueError("rpc_invalid_params")
+            if code == -32015:
+                raise ValueError("rpc_version_unsupported")
+            raise ValueError("rpc_error")
+        if not isinstance(body.get("result"),dict):
             raise ValueError("rpc_error")
         return body["result"]
     try:
@@ -73,7 +87,9 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
     except httpx.HTTPError:
         return {**denied,"status":"transport_error"}
     except (ValueError,TypeError,KeyError) as exc:
-        known={"rate_limited","http_error","response_too_large","rpc_error"}
+        known={"rate_limited","http_error","response_too_large","rpc_error",
+               "rpc_node_unhealthy","rpc_method_unsupported","rpc_invalid_params",
+               "rpc_version_unsupported","invalid_rpc_response"}
         return {**denied,"status":str(exc) if str(exc) in known else "invalid_rpc_response"}
 
 async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RPC,
