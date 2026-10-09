@@ -50,6 +50,11 @@ class IndexedResearchTests(unittest.TestCase):
             transport=httpx.MockTransport(handler)))
         self.assertEqual(r["status"],"missing_index_metadata")
         self.assertFalse(r["chain_pass_allowed"])
+    def test_full_page_reported_total_is_ambiguous(self):
+        r,_=run({1:[account("a","owner1",30),account("b","owner2",20)]})
+        self.assertEqual(r["status"],"full_page_total_ambiguous")
+        self.assertFalse(r["owner_coverage_complete"])
+        self.assertFalse(r["chain_pass_allowed"])
     def test_requires_key(self):
         r=asyncio.run(collect_indexed_owner_research(MINT,api_key=""))
         self.assertEqual(r["status"],"invalid_input")
