@@ -106,6 +106,14 @@ class SavipChainWorker:
                                 d["solana_helius_evidence_status"]=helius.get("status")
                                 d["solana_helius_token_accounts"]=helius.get("token_accounts")
                                 d["solana_helius_slot_stable"]=helius.get("slot_stable")
+                                # Single-candidate atomic proof probe only when explicitly
+                                # enabled; never changes CHAIN approval or shadow execution.
+                                if getattr(settings,"solana_atomic_canary_enabled",False):
+                                    atomic=await self.sol_chain.fetch_atomic_owner_research(address)
+                                    d["solana_atomic_owner_status"]=atomic.get("status")
+                                    d["solana_atomic_owner_holder_count"]=atomic.get("holder_count")
+                                    d["solana_atomic_owner_primary_slot"]=atomic.get("primary_snapshot_slot")
+                                    d["solana_atomic_owner_secondary_slot"]=atomic.get("secondary_snapshot_slot")
                     except RuntimeError as rpc_error:
                         if "solana_rpc_" not in str(rpc_error):raise
                         # The GT dossier is still valid; do not claim the wallet check passed.
