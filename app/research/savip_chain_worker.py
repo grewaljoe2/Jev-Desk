@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone
 from app.research.savip_trade_cut import exact_trade_cut
 from app.storage.db import savip_candidate_pool,open_savip_positions, savip_recent_chain_tokens
-from app.research.savip_chain_cut import evaluate_chain
+from app.research.savip_chain_cut import evaluate_chain, known_chain_kill
 from app.research.solana_account_lower_bound import classify_account_lower_bound
 from app.core.config import settings
 
@@ -55,6 +55,13 @@ class SavipChainWorker:
                 if not d: raise RuntimeError("missing_dossier")
                 d={**row,**d}
                 if row["chain"]=="solana":
+                    early_reason=known_chain_kill(d)
+                    if early_reason:
+                        await self._persist(row["token_id"],d,False,early_reason)
+                        self.last_kills[early_reason]=self.last_kills.get(early_reason,0)+1
+                        self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"kill","reason":early_reason,"wallet_rpc_skipped":True})
+                        self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
+                        continue
                     d["solana_wallet_rpc_status"]="pending"
                     try:
                         sf=await self.sol_chain.fetch("solana",address)
