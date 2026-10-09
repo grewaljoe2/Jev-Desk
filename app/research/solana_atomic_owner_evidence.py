@@ -39,6 +39,11 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                 filters.insert(0,{"dataSize":165})
             discovery=await rpc(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"filters":filters,"dataSlice":{"offset":0,"length":0}}])
             accounts=discovery.get("value")
+            # A provider may serve an older snapshot after discovery; conservation
+            # alone must not certify a snapshot older than the discovery context.
+            discovery_slot=(discovery.get("context") or {}).get("slot")
+            if type(discovery_slot) is not int or discovery_slot<0:
+                return {**denied,"status":"invalid_discovery_slot"}
             if not isinstance(accounts,list) or len(accounts)>99:
                 return {**denied,"status":"atomic_account_limit"}
             addresses=[item.get("pubkey") for item in accounts if isinstance(item,dict)]
@@ -47,7 +52,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             result=await rpc(client,"getMultipleAccounts",[[mint]+addresses,{"encoding":"base64","commitment":"confirmed"}])
             slot=(result.get("context") or {}).get("slot")
             values=result.get("value")
-            if type(slot) is not int or slot<0 or not isinstance(values,list) or len(values)!=len(addresses)+1:
+            if type(slot) is not int or slot<discovery_slot or not isinstance(values,list) or len(values)!=len(addresses)+1:
                 return {**denied,"status":"invalid_atomic_response"}
             if not isinstance(values[0],dict) or values[0].get("owner")!=program:
                 return {**denied,"status":"mint_program_changed"}
