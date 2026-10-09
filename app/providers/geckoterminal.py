@@ -41,7 +41,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             self._solana_source_index+=1
         out=[];research=[];diag={"mode":"mixed_trending_new_pools_v1","source":source,"network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
         try:
-            r=await self._get(f"{self.BASE}/networks/{network}/{source}",params={"page":1});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
+            r=await self._get(f"{self.BASE}/networks/{network}/{source}",params={"page":1,"include":"dex,base_token,quote_token"});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
             rows=r.json().get("data",[]);diag["rows"]=len(rows)
             for row in rows[:20]:
                 s=self._snapshot(network,row)
@@ -51,7 +51,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
                 if network=="solana" and s.age_minutes is not None:
                     from app.research.savip_liquidity_experiment import compare_liquidity_gate
                     comparison=compare_liquidity_gate(s.model_dump())
-                    research.append({"token_id":s.token_id,"pool_id":s.raw.get("pool_id"),"source":source,
+                    research.append({"token_id":s.token_id,"pool_id":s.raw.get("pool_id"),"source":source,"dex_id":((row.get("relationships") or {}).get("dex") or {}).get("data",{}).get("id"),
                                      "liquidity_usd":s.liquidity_usd,"original_discovery_gate":gate,
                                      "control_eligible":comparison.control_eligible,
                                      "experiment_eligible":comparison.experiment_eligible,
@@ -96,7 +96,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         if created:
             try:age=max(0.0,(datetime.now(timezone.utc)-datetime.fromisoformat(str(created).replace("Z","+00:00"))).total_seconds()/60.0)
             except:pass
-        return TokenSnapshot(token_id=f"{network}:{addr}",address=addr,chain=network,ticker=a.get("name") or addr[:8],price_usd=_f(a.get("base_token_price_usd")),age_minutes=age,liquidity_usd=_f(a.get("reserve_in_usd")),volume_h24_usd=_f(vol.get("h24")),mcap_usd=_f(a.get("market_cap_usd") or a.get("fdv_usd")),trades_h24=_i(tx.get("buys"))+_i(tx.get("sells")),raw={"source":"geckoterminal","pool_id":row.get("id"),"pool_created_at":a.get("pool_created_at")})
+        return TokenSnapshot(token_id=f"{network}:{addr}",address=addr,chain=network,ticker=a.get("name") or addr[:8],price_usd=_f(a.get("base_token_price_usd")),age_minutes=age,liquidity_usd=_f(a.get("reserve_in_usd")),volume_h24_usd=_f(vol.get("h24")),mcap_usd=_f(a.get("market_cap_usd") or a.get("fdv_usd")),trades_h24=_i(tx.get("buys"))+_i(tx.get("sells")),raw={"source":"geckoterminal","pool_id":row.get("id"),"dex_id":((rel.get("dex") or {}).get("data") or {}).get("id"),"quote_token_id":((rel.get("quote_token") or {}).get("data") or {}).get("id"),"pool_created_at":a.get("pool_created_at")})
 def _f(v):
     try:return float(v) if v is not None else None
     except:return None
