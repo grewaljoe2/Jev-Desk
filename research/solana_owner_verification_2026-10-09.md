@@ -37,3 +37,10 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Retrieved and inspected committed `tests/test_solana_owner_snapshot_adversarial.py`; it contains six `unittest` test methods, but its execution has **not** been verified in CI. GitHub returned no workflow runs for commit `c6dd0c93061cf37c010712ef617bb6648dcc9255`.
 - The tests currently demonstrate *counterexamples only* and are not wired to exercise `collect_cursor_owner_research`, `SavipChainProvider`, or `SavipChainWorker`. The mandatory integration/offline verifier release gate is **NOT MET**.
 - Do not misreport the local standalone script's pass as GitHub CI or production implementation validation.
+
+## Offline execution checkpoint — 2026-10-09 (latest)
+- Locally executed `/mnt/data/solana_owner_release_gate_tests.py`: six synthetic adversarial checks passed.
+- Locally compiled `/mnt/data/jev_research/test_helius_collector_rpc.py` using `py_compile`: syntax accepted.
+- Attempted `python -m unittest discover -s /mnt/data/jev_research -p 'test_helius_collector_rpc.py' -v`: **FAILED TO START** with `ModuleNotFoundError: No module named 'app'` because the working container has only the test file, not a checked-out Jev Desk repository. This is an environment/import failure, not a failing RPC assertion and not a passing integration test.
+- GitHub connector has repository source, but local container cannot resolve `github.com` to clone; do not claim the mocked-RPC tests were executed until the actual app modules are present.
+- Remediation: run test from a complete repository checkout or in GitHub Actions on research branch; do not merge/deploy based on standalone synthetic tests.
