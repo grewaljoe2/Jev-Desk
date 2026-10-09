@@ -25,6 +25,9 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
     pages=0
     expected_total=None
     indexed_slot=None
+    metadata_changes=0
+    last_page_total=None
+    last_page_slot=None
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds,transport=transport) as client:
             for page in range(1,max_pages+1):
@@ -57,7 +60,9 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                     expected_total=page_total
                     indexed_slot=page_slot
                 elif page_total!=expected_total or page_slot!=indexed_slot:
-                    return {**denied,"status":"index_changed_during_pagination","pages":pages}
+                    metadata_changes+=1
+                last_page_total=page_total
+                last_page_slot=page_slot
                 rows=result["token_accounts"]
                 if len(rows)>page_size:
                     return {**denied,"status":"oversized_page","pages":pages}
@@ -74,7 +79,10 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                             "indexed_total":expected_total,
                             "unique_owners":len(owners),"accounts_total":total,
                             "largest_owner_amount":max(owners.values(),default=0),
-                            "owner_balance_digest":digest}
+                            "owner_balance_digest":digest,
+                            "metadata_changes":metadata_changes,
+                            "last_page_total":last_page_total,
+                            "last_page_slot":last_page_slot}
                 for row in rows:
                     if not isinstance(row,dict) or row.get("mint")!=mint:
                         return {**denied,"status":"mint_mismatch","pages":pages}
@@ -88,7 +96,10 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                     total+=amount
                 pages=page
             return {**denied,"status":"page_cap_reached","pages":pages,
-                    "token_accounts":len(seen)}
+                    "token_accounts":len(seen),
+                    "metadata_changes":metadata_changes,
+                    "last_page_total":last_page_total,
+                    "last_page_slot":last_page_slot}
     except httpx.TimeoutException:
         return {**denied,"status":"timeout","pages":pages}
     except (httpx.HTTPError,ValueError,TypeError,KeyError):
