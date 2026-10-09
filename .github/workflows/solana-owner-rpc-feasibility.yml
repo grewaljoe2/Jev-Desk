@@ -12,7 +12,7 @@ on:
         type: choice
         options:
           - TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
-          - TokenzQdBNbLqP5VEhdkAS6EPFzDzzMbaK6r3nW4u
+          - TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb
 jobs:
   one-shot-read-only:
     runs-on: ubuntu-latest

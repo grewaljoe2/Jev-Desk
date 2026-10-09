@@ -8,7 +8,7 @@ import binascii
 
 ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFzDzzMbaK6r3nW4u"
+TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 SUPPORTED = frozenset((TOKEN_PROGRAM, TOKEN_2022))
 
 def b58encode(data):
