@@ -6,7 +6,7 @@ must agree. Matching balances do not independently certify RPC completeness.
 import asyncio
 import json
 import httpx
-from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_rpc_snapshot
+from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_rpc_snapshot, decode_mint_account
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
 
 RPC = "https://api.mainnet-beta.solana.com"
@@ -41,6 +41,7 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             if not isinstance(value,dict) or value.get("owner") not in SUPPORTED:
                 return {**denied,"status":"unsupported_or_missing_mint"}
             program=value["owner"]
+            mint_data=decode_mint_account(value,program=program)
             mint_slot=(info.get("context") or {}).get("slot")
             if type(mint_slot) is not int or mint_slot < 0:
                 return {**denied,"status":"invalid_mint_slot"}
@@ -54,7 +55,8 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             supply=await request(client,"getTokenSupply",[mint,{"commitment":"confirmed","minContextSlot":snapshot["slot"]}])
             amount=(supply.get("value") or {}).get("amount")
             slot=(supply.get("context") or {}).get("slot")
-            if not isinstance(amount,str) or not amount.isdecimal():
+            decimals=(supply.get("value") or {}).get("decimals")
+            if not isinstance(amount,str) or not amount.isdecimal() or type(decimals) is not int or decimals != mint_data["decimals"]:
                 return {**denied,"status":"invalid_supply"}
             if type(slot) is not int or slot < snapshot["slot"]:
                 return {**denied,"status":"stale_supply_snapshot","mint_program":program,
