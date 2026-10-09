@@ -27,6 +27,13 @@ class DualAtomicTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["chain_pass_allowed"])
 
     @patch("app.research.solana_dual_atomic_owner_evidence.collect_atomic_small_mint")
+    async def test_stale_cross_provider_slot_gap_fails_closed(self,collect):
+        collect.side_effect=[dict(BASE),{**BASE,"atomic_snapshot_slot":300}]
+        result=await compare_atomic_owner_snapshots("mint")
+        self.assertEqual(result["status"],"cross_provider_slot_gap")
+        self.assertFalse(result["chain_pass_allowed"])
+
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_atomic_small_mint")
     async def test_secondary_failure_fails_closed(self,collect):
         collect.side_effect=[dict(BASE),{"status":"atomic_rpc_or_decode_error"}]
         result=await compare_atomic_owner_snapshots("mint")
