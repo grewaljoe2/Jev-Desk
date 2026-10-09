@@ -82,3 +82,8 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Audit identified `getAccountInfo` mint slot could be earlier than `getProgramAccounts` token-account slot, while code only checked that account slot was not older. Reconciliation could then compare mint supply from an earlier state with later token accounts.
 - Research commit `5f6bc3c` rejects this with `mint_accounts_slot_mismatch`. Commit `2d9f78f` includes this mismatch in existing bounded per-provider retry path. Commit `cfe6f68` adds two mocked tests for retry failure and recovery; **not execution-verified**.
 - All three observations now must have equal slots before reconciliation, but a slot equality check alone is not proof of provider snapshot completeness or independence. No merge/deploy.
+
+## Offline rerun after bounded mint-slot retry (2026-10-09)
+- Executed `python -m unittest discover -s tests -v` in `/mnt/data/jev_offline` after updating local equivalents of both newly committed retry cases and the local retry allowlist. Result: **23 tests, 23 passed**.
+- **Provenance:** local files are reconstructed/minimal equivalents, not exact GitHub checkout; this does not establish full repository integration, real provider consistency, or wallet ownership completeness.
+- Remaining concern: `SavipChainProvider` promotes `independently_correlated_research` to `owner_coverage_complete=True` despite research collector returning `chain_pass_allowed=False`. Before production release, the evidence trust boundary needs an explicit, independently substantiated approval contract rather than treating correlation alone as certification. No merge or deploy.
