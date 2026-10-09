@@ -21,8 +21,13 @@ class ProviderOwnerBoundaryTests(unittest.TestCase):
                 return asyncio.run(provider.fetch_independent_owner_evidence("test-mint"))
             finally:
                 asyncio.run(provider.client.aclose())
-    def test_same_slot_can_be_verified(self):
-        self.assertTrue(self.check(correlated())["owner_coverage_complete"])
+    def test_research_correlation_never_verifies(self):
+        self.assertFalse(self.check(correlated())["owner_coverage_complete"])
+    def test_explicit_approval_flags_required(self):
+        self.assertFalse(self.check(correlated(chain_pass_allowed=True))["owner_coverage_complete"])
+        self.assertFalse(self.check(correlated(owner_coverage_complete=True))["owner_coverage_complete"])
+    def test_approved_same_slot_evidence_can_be_verified(self):
+        self.assertTrue(self.check(correlated(chain_pass_allowed=True,owner_coverage_complete=True))["owner_coverage_complete"])
     def test_different_slots_denied_even_with_matching_digest(self):
         self.assertFalse(self.check(correlated(secondary_snapshot_slot=101))["owner_coverage_complete"])
     def test_missing_same_slot_flag_denied(self):
