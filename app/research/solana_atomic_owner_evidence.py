@@ -101,3 +101,55 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
     except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError, UnicodeError):
         return {**denied,"status":"atomic_rpc_or_decode_error"}
+
+async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-beta.solana.com",
+                                       transport=None, timeout=25, max_accounts=20000):
+    """Large classic-SPL mint: one contextual sliced account scan and same-slot mint.
+
+    Bounded to 20k accounts / 6 MB; retries are read-only and fail closed.
+    No live execution or independent proof is implied by this collector.
+    """
+    from app.research.solana_rpc_owner_decoder import decode_sliced_rpc_snapshot
+    denied={"status":"full_snapshot_unverified","chain_pass_allowed":False,
+            "owner_coverage_complete":False}
+    if not isinstance(mint,str) or not mint or max_accounts>20000 or max_accounts<1:
+        return denied
+    async def rpc(client,method,params):
+        response=await client.post(rpc_url,json={"jsonrpc":"2.0","id":1,
+                                                  "method":method,"params":params})
+        response.raise_for_status()
+        if len(response.content)>6_000_000:
+            raise ValueError("oversized_response")
+        body=response.json()
+        if not isinstance(body,dict) or "error" in body or not isinstance(body.get("result"),dict):
+            raise ValueError("invalid_rpc")
+        return body["result"]
+    try:
+        async with httpx.AsyncClient(timeout=timeout,transport=transport) as client:
+            for _ in range(3):
+                discovery=await rpc(client,"getProgramAccounts",[TOKEN_PROGRAM,{
+                    "encoding":"base64","commitment":"confirmed","withContext":True,
+                    "filters":[{"dataSize":165},{"memcmp":{"offset":0,"bytes":mint}}],
+                    "dataSlice":{"offset":32,"length":77}}])
+                snapshot=decode_sliced_rpc_snapshot(discovery,mint=mint,
+                                                     program=TOKEN_PROGRAM,max_accounts=max_accounts)
+                slot=snapshot["slot"]
+                info=await rpc(client,"getAccountInfo",[mint,{
+                    "encoding":"base64","commitment":"confirmed",
+                    "minContextSlot":slot}])
+                mint_slot=(info.get("context") or {}).get("slot")
+                if type(mint_slot) is not int or mint_slot!=slot:
+                    continue
+                value=info.get("value")
+                mint_data=decode_mint_account(value,program=TOKEN_PROGRAM)
+                raw=base64.b64decode(value["data"][0],validate=True)
+                outcome=reconcile_owner_balances(snapshot,mint=mint,program=TOKEN_PROGRAM,
+                                                  supply_amount=mint_data["amount"],supply_slot=slot)
+                return {**outcome,"status":"full_sliced_"+str(outcome.get("status")),
+                        "atomic_snapshot_slot":slot,"discovered_accounts":len(snapshot["rows"]),
+                        "mint_authority":int.from_bytes(raw[:4],"little")==1,
+                        "freeze_authority":int.from_bytes(raw[46:50],"little")==1,
+                        "chain_pass_allowed":False,"owner_coverage_complete":False}
+            return {**denied,"status":"full_snapshot_slot_mismatch"}
+    except (httpx.HTTPError,ValueError,TypeError,KeyError,IndexError,UnicodeError):
+        return {**denied,"status":"full_snapshot_rpc_or_decode_error"}
