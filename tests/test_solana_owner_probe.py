@@ -5,7 +5,7 @@ import json
 import unittest
 import httpx
 from app.research.solana_owner_probe import probe_owner_accounts
-from app.research.solana_rpc_owner_decoder import TOKEN_PROGRAM,b58encode
+from app.research.solana_rpc_owner_decoder import TOKEN_PROGRAM,TOKEN_2022,b58encode
 
 MINT=b58encode(bytes([7])*32)
 
@@ -59,6 +59,15 @@ class OwnerProbeTests(unittest.TestCase):
     def test_invalid_rpc_response_distinguished(self):
         self.assertEqual(run(lambda req:httpx.Response(200,content=b"not-json"))["status"],
                          "invalid_rpc_response")
+    def test_official_token_2022_program_id(self):
+        self.assertEqual(TOKEN_2022, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+        def handler(request):
+            payload=json.loads(request.content)
+            self.assertEqual(payload["params"][0], TOKEN_2022)
+            self.assertNotIn({"dataSize":165},payload["params"][1]["filters"])
+            return httpx.Response(200,json={"jsonrpc":"2.0","result":{"context":{"slot":123},"value":[]},"id":1})
+        result=asyncio.run(probe_owner_accounts(MINT,TOKEN_2022,transport=httpx.MockTransport(handler)))
+        self.assertEqual(result["status"],"decoded_unverified")
     def test_invalid_program_no_network(self):
         result=asyncio.run(probe_owner_accounts(MINT,"invalid"))
         self.assertEqual(result["status"],"invalid_request")
