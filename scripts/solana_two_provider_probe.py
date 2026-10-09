@@ -1,4 +1,4 @@
-"""One-shot research probe. Read-only; no production CHAIN integration."""
+"""One-shot research probe. Read-only; no production CHAIN integration.\n\nIncludes one bounded same-slot mismatch retry per provider.\n"""
 import asyncio
 import json
 from app.research.solana_owner_evidence_pipeline import collect_independently_confirmed_owner_evidence
