@@ -73,3 +73,8 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - PR #205 merged 06f17379e0fb173051522b7355e98a0a148a5074; workflow 37864058672 SUCCESS. Provider now reports largest_token_account_fraction as unverified diagnostic, top_wallet_fraction=None, owner_coverage_complete=False; CHAIN worker only marks owner check 'ok' when coverage_complete true and keeps incomplete evidence out of wallet concentration gate. Existing offline owner coverage tests plus new token-account regression executed in CI.
 - This deliberately does NOT solve Solana wallet verification; Solana CHAIN remains pending until complete owner-aware collector is validated, with public RPC rate limits. Do not treat zero Solana CHAIN passes as fixed by this patch.
 - NEXT: deploy/verify; then research no-cost complete owner enumeration feasibility, rate-limit-safe approach and offline tests. No paid APIs or relaxed thresholds.
+
+## PR #206 Solana CHAIN boundary
+- PR #206 merged 9328627bc972fef54e917d427e44c45c0d991707; CI 37864627691 SUCCESS. evaluate_chain now independently refuses Solana when solana_wallet_rpc_status!='ok' or top_wallet_percent is missing; regression in tests/test_solana_chain_boundary.py. Existing limits untouched.
+- Previous PR #205 deployment dep-db436qlg1s2s7382h0p0 verified LIVE 2026-10-09 00:21:46 UTC; startup success, GET / 200.
+- Next: deploy #206 and verify. Actual complete owner enumeration remains unimplemented; no claims of genuine Solana verification or shadow fills.
