@@ -81,7 +81,7 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
 
     This does not authorize production CHAIN passes. Both snapshots must
     independently conserve supply at their respective slots, and have identical
-    per-owner balances; different snapshot slots are not silently reconciled.
+    per-owner balances. Different slots require exact owner-map and supply\n    equality; no interpolation or inferred state is accepted.
     """
     denied={"status":"independent_confirmation_unavailable",
             "owner_coverage_complete":False,"chain_pass_allowed":False}
@@ -97,12 +97,15 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
         second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("positive_balance_coverage_proven") is not True:
         return {**denied,"primary_status":first.get("status"),"secondary_status":second.get("status")}
-    if first.get("accounts_slot") != second.get("accounts_slot") or first.get("supply_amount") != second.get("supply_amount"):
-        return {**denied,"status":"cross_provider_slot_or_supply_mismatch"}
+    if first.get("supply_amount") != second.get("supply_amount"):
+        return {**denied,"status":"cross_provider_supply_mismatch"}
     digest=first.get("owner_balance_digest")
     if not isinstance(digest,str) or not digest or digest!=second.get("owner_balance_digest"):
         return {**denied,"status":"cross_provider_owner_mismatch"}
     return {**denied,"status":"independently_correlated_research",
             "cross_provider_owner_match":True,"positive_balance_coverage_proven":True,
-            "snapshot_slot":first["accounts_slot"],"owner_balance_digest":digest,
+            "primary_snapshot_slot":first["accounts_slot"],
+            "secondary_snapshot_slot":second["accounts_slot"],
+            "cross_provider_same_slot":first["accounts_slot"]==second["accounts_slot"],
+            "owner_balance_digest":digest,
             "largest_owner_fraction":first.get("largest_owner_fraction")}

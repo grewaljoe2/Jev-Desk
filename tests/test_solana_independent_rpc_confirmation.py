@@ -29,3 +29,4 @@ class IndependentConfirmationTests(unittest.IsolatedAsyncioTestCase):
     async def test_same_rpc_is_not_independent(self):
         r=await collect_independently_confirmed_owner_evidence("mint",primary_rpc="same",secondary_rpc="same")
         self.assertEqual(r["status"],"same_provider")
+
