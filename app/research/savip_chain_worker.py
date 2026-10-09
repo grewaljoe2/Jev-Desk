@@ -85,12 +85,14 @@ class SavipChainWorker:
                                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"kill","reason":"top_wallet_lower_bound"})
                                 self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
                                 continue
-                            verified=await self.sol_chain.fetch_independent_owner_evidence(address)
-                            if (verified.get("owner_coverage_complete") is not True
-                                and settings.solana_atomic_canary_enabled
+                            if (settings.solana_atomic_canary_enabled
                                 and not getattr(self,"_atomic_canary_used",False)):
+                                # The canary is a single bounded alternative, not an
+                                # additional scan after the legacy expensive collector.
                                 self._atomic_canary_used=True
                                 verified=await self.sol_chain.fetch_atomic_shadow_owner_evidence(address)
+                            else:
+                                verified=await self.sol_chain.fetch_independent_owner_evidence(address)
                             if verified.get("owner_coverage_complete") is True:
                                 d["top_wallet_percent"]=verified["top_wallet_fraction"]
                                 d["holder_count"]=verified["holder_count"]
