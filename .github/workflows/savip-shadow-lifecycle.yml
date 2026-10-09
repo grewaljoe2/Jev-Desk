@@ -31,3 +31,31 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_solana_pending_diagnostics.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_rpc_owner_decoder.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_owner_probe.py' -v
+      - name: TEMP read-only mint identity check
+        run: |
+          python - <<'PY'
+          import asyncio,json,httpx
+          mint="2JxdiEFs3K8tVtWp4Q3SK6RGNwLJaRRNmX63y3Xnpump"
+          async def main():
+              async with httpx.AsyncClient(timeout=12) as client:
+                  for method,params in (
+                      ("getAccountInfo",[mint,{"encoding":"base64","commitment":"confirmed"}]),
+                      ("getTokenSupply",[mint,{"commitment":"confirmed"}]),
+                  ):
+                      try:
+                          resp=await client.post("https://api.mainnet-beta.solana.com",json={"jsonrpc":"2.0","id":1,"method":method,"params":params})
+                          data=resp.json()
+                          result=data.get("result") or {}
+                          value=result.get("value")
+                          output={"method":method,"http_status":resp.status_code,"rpc_error":data.get("error")}
+                          if method=="getAccountInfo":
+                              output["exists"]=value is not None
+                              output["program"]=value.get("owner") if isinstance(value,dict) else None
+                          else:
+                              output["amount"]=value.get("amount") if isinstance(value,dict) else None
+                              output["decimals"]=value.get("decimals") if isinstance(value,dict) else None
+                          print("MINT_CHECK="+json.dumps(output,sort_keys=True),flush=True)
+                      except (httpx.HTTPError,ValueError) as exc:
+                          print("MINT_CHECK="+json.dumps({"method":method,"error":type(exc).__name__}),flush=True)
+          asyncio.run(main())
+          PY
