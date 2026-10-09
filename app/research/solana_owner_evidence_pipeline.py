@@ -93,8 +93,12 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
     second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("positive_balance_coverage_proven") is not True:
         return {**denied,"primary_status":first.get("status"),"secondary_status":second.get("status")}
-    # Aggregate values are insufficient to establish identical owner sets.
-    # A stronger confirmation must compare owner identities and balances,
-    # not only the top-wallet percentage or account count.
-    return {**denied,"status":"aggregate_only_unverified",
-            "primary_status":first.get("status"),"secondary_status":second.get("status")}
+    if first.get("accounts_slot") != second.get("accounts_slot") or first.get("supply_amount") != second.get("supply_amount"):
+        return {**denied,"status":"cross_provider_slot_or_supply_mismatch"}
+    digest=first.get("owner_balance_digest")
+    if not isinstance(digest,str) or not digest or digest!=second.get("owner_balance_digest"):
+        return {**denied,"status":"cross_provider_owner_mismatch"}
+    return {**denied,"status":"independently_correlated_research",
+            "cross_provider_owner_match":True,"positive_balance_coverage_proven":True,
+            "snapshot_slot":first["accounts_slot"],"owner_balance_digest":digest,
+            "largest_owner_fraction":first.get("largest_owner_fraction")}
