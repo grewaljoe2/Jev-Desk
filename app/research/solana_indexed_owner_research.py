@@ -23,6 +23,8 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
     seen=set()
     total=0
     pages=0
+    expected_total=None
+    indexed_slot=None
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds,transport=transport) as client:
             for page in range(1,max_pages+1):
@@ -47,6 +49,15 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                 result=body.get("result")
                 if not isinstance(result,dict) or not isinstance(result.get("token_accounts"),list):
                     return {**denied,"status":"invalid_page","pages":pages}
+                page_total=result.get("total")
+                page_slot=result.get("last_indexed_slot")
+                if type(page_total) is not int or page_total<0 or type(page_slot) is not int or page_slot<0:
+                    return {**denied,"status":"missing_index_metadata","pages":pages}
+                if expected_total is None:
+                    expected_total=page_total
+                    indexed_slot=page_slot
+                elif page_total!=expected_total or page_slot!=indexed_slot:
+                    return {**denied,"status":"index_changed_during_pagination","pages":pages}
                 rows=result["token_accounts"]
                 if len(rows)>page_size:
                     return {**denied,"status":"oversized_page","pages":pages}
@@ -62,10 +73,15 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                     owners[owner]+=amount
                     total+=amount
                 pages=page
-                if len(rows)<page_size:
+                if len(seen)>expected_total:
+                    return {**denied,"status":"index_total_exceeded","pages":pages}
+                if len(rows)<page_size and len(seen)!=expected_total:
+                    return {**denied,"status":"index_total_mismatch","pages":pages}
+                if len(seen)==expected_total:
                     digest=hashlib.sha256(json.dumps(sorted(owners.items()),separators=(",",":")).encode()).hexdigest()
                     return {**denied,"status":"indexed_pages_exhausted_unverified",
                             "pages":pages,"token_accounts":len(seen),
+                            "last_indexed_slot":indexed_slot,"indexed_total":expected_total,
                             "unique_owners":len(owners),"accounts_total":total,
                             "largest_owner_amount":max(owners.values(),default=0),
                             "owner_balance_digest":digest}
