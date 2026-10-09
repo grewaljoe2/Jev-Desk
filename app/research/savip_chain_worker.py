@@ -88,6 +88,8 @@ class SavipChainWorker:
                             verified=await self.sol_chain.fetch_independent_owner_evidence(address)
                             if verified.get("owner_coverage_complete") is True:
                                 d["top_wallet_percent"]=verified["top_wallet_fraction"]
+                                d["holder_count"]=verified["holder_count"]
+                                d["top_10_percent"]=verified["top_10_percent"]
                                 d["solana_wallet_rpc_status"]="ok"
                                 d["solana_owner_evidence_source"]=verified.get("source")
                             else:

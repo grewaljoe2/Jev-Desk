@@ -34,7 +34,8 @@ def reconcile_owner_balances(snapshot, *, mint, program, supply_amount, supply_s
         total += amount
         if total > supply_amount:
             return {**result, "status": "amount_exceeds_supply"}
-    largest = max(owners.values(), default=0)
+    positive_owners = sorted((balance for balance in owners.values() if balance > 0), reverse=True)
+    largest = positive_owners[0] if positive_owners else 0
     matching = total == supply_amount
     fraction = largest / supply_amount
     # Exact conservation of all positive balances at the same slot proves that
@@ -46,6 +47,8 @@ def reconcile_owner_balances(snapshot, *, mint, program, supply_amount, supply_s
             "owner_balance_digest": owner_digest,
             "positive_balance_coverage_proven": covered,
             "token_accounts": len(accounts), "unique_owners": len(owners),
+            "holder_count": len(positive_owners) if covered else None,
+            "top_10_percent": (100 * sum(positive_owners[:10]) / supply_amount) if covered else None,
             "accounts_total": total, "supply_amount": supply_amount,
             "largest_owner_amount": largest, "largest_owner_fraction": fraction,
             "same_slot": True, "amounts_match": matching,

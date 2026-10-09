@@ -61,7 +61,13 @@ class SavipChainProvider:
                     "source":"solana_independent_owner_evidence",
                     "primary_status":result.get("primary_status"),"secondary_status":result.get("secondary_status"),
                     "failed_provider":result.get("failed_provider")}
+        holders=result.get("holder_count")
+        top10=result.get("top_10_percent")
+        if type(holders) is not int or holders<1 or type(top10) not in (int,float) or not (0<=top10<=100):
+            return {"owner_coverage_complete":False,"status":"missing_reconciled_concentration",
+                    "source":"solana_independent_owner_evidence"}
         return {"owner_coverage_complete":True,"top_wallet_fraction":float(fraction),
+                "holder_count":holders,"top_10_percent":float(top10),
                 "status":"independently_verified","source":"solana_independent_owner_evidence"}
 
     async def _rpc(self,method,params):
