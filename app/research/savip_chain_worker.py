@@ -86,6 +86,9 @@ class SavipChainWorker:
                                 self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
                                 continue
                             verified=await self.sol_chain.fetch_independent_owner_evidence(address)
+                            if (verified.get("owner_coverage_complete") is not True
+                                and settings.solana_atomic_canary_enabled):
+                                verified=await self.sol_chain.fetch_atomic_shadow_owner_evidence(address)
                             if verified.get("owner_coverage_complete") is True:
                                 d["top_wallet_percent"]=verified["top_wallet_fraction"]
                                 d["holder_count"]=verified["holder_count"]
