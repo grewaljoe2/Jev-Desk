@@ -5,6 +5,7 @@ bounded getMultipleAccounts batches. Every batch MUST report the same slot.\nNev
 discovery; conservation against the mint supply at that same response slot
 is mandatory. This path intentionally does not authorize production CHAIN.
 """
+import asyncio
 import base64
 import httpx
 from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_mint_account, decode_token_account
@@ -54,10 +55,15 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             # slot, including the mint supply. No slot interpolation is allowed.
             batches=[[mint]+addresses[:99]]
             batches.extend(addresses[i:i+100] for i in range(99,len(addresses),100))
+            # Issue bounded reads concurrently to improve the chance of a
+            # shared bank slot. Concurrency never substitutes for the exact
+            # slot check below; every response is independently validated.
+            results=await asyncio.gather(*(rpc(client,"getMultipleAccounts",
+                [batch,{"encoding":"base64","commitment":"confirmed",
+                        "minContextSlot":discovery_slot}]) for batch in batches))
             slot=None
             values=[]
-            for batch in batches:
-                result=await rpc(client,"getMultipleAccounts",[batch,{"encoding":"base64","commitment":"confirmed","minContextSlot":discovery_slot}])
+            for batch,result in zip(batches,results):
                 batch_slot=(result.get("context") or {}).get("slot")
                 batch_values=result.get("value")
                 if (type(batch_slot) is not int or batch_slot<discovery_slot
