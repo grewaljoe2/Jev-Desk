@@ -62,7 +62,13 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             self._research_history[(item["token_id"],item["pool_id"])]=item
         while len(self._research_history)>500:
             self._research_history.pop(next(iter(self._research_history)))
-        diag["pool_coverage"]=summarize_pool_coverage(self._research_history.values())
+        coverage=summarize_pool_coverage(self._research_history.values())
+        diag["pool_coverage"]={"observed_pools":coverage["observed_pools"],
+                               "unique_tokens":coverage["unique_tokens"],
+                               "dex_counts":coverage["dex_counts"],
+                               "multi_pool_tokens":sum(t["pool_count"]>1 for t in coverage["tokens"]),
+                               "experiment_eligible_tokens":sum(t["any_experiment_eligible"] for t in coverage["tokens"])}
+        diag["coverage_scope"]="sampled_page_one_trending_and_new_pools_not_dex_complete"
         diag["research_observed"]=len(research)
         diag["research_newly_admitted"]=sum(x["newly_admitted"] for x in research)
         self.last_research_observations=research
