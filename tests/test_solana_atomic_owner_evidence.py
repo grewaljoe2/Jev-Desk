@@ -104,6 +104,35 @@ class AtomicOwnerTests(unittest.TestCase):
         self.assertEqual(bad["status"],"multi_batch_slot_mismatch")
         self.assertFalse(bad["owner_coverage_complete"])
 
+    def test_multi_batch_rejects_missing_account_and_rate_limit(self):
+        addresses=[b58encode(i.to_bytes(32,"big")) for i in range(1,151)]
+        def run(mode):
+            def handler(request):
+                call=json.loads(request.content)
+                method=call["method"]
+                if method=="getAccountInfo":
+                    result={"context":{"slot":100},"value":mint_value(supply=150)}
+                elif method=="getProgramAccounts":
+                    result={"context":{"slot":101},"value":[{"pubkey":a,"account":{}} for a in addresses]}
+                elif method=="getMultipleAccounts":
+                    batch=call["params"][0]
+                    if mode=="rate_limit" and MINT not in batch:
+                        return httpx.Response(429,text="rate limited")
+                    values=[mint_value(supply=150) if a==MINT else token_value(amount=1) for a in batch]
+                    if mode=="missing" and MINT not in batch:
+                        values[0]=None
+                    result={"context":{"slot":102},"value":values}
+                else:
+                    raise AssertionError(method)
+                return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
+            return asyncio.run(collect_atomic_small_mint(MINT,transport=httpx.MockTransport(handler)))
+        missing=run("missing")
+        self.assertEqual(missing["status"],"discovered_account_missing")
+        self.assertFalse(missing["chain_pass_allowed"])
+        limited=run("rate_limit")
+        self.assertEqual(limited["status"],"atomic_rpc_or_decode_error")
+        self.assertFalse(limited["owner_coverage_complete"])
+
     def test_atomic_account_limit(self):
         result=self.run_case(accounts=300)
         self.assertEqual(result["status"],"atomic_account_limit")
