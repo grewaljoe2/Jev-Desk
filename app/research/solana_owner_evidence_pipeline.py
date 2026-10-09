@@ -127,4 +127,6 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
             "secondary_snapshot_slot":second["accounts_slot"],
             "cross_provider_same_slot":first["accounts_slot"]==second["accounts_slot"],
             "owner_balance_digest":digest,
-            "largest_owner_fraction":first.get("largest_owner_fraction")}
+            "largest_owner_fraction":first.get("largest_owner_fraction"),
+            "holder_count":first.get("holder_count"),
+            "top_10_percent":first.get("top_10_percent")}
