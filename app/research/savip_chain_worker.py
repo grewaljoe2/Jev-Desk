@@ -108,7 +108,8 @@ class SavipChainWorker:
                                 d["solana_helius_slot_stable"]=helius.get("slot_stable")
                                 # Single-candidate atomic proof probe only when explicitly
                                 # enabled; never changes CHAIN approval or shadow execution.
-                                if getattr(settings,"solana_atomic_canary_enabled",False):
+                                if settings.solana_atomic_canary_enabled and not getattr(self,"_atomic_canary_used",False):
+                                    self._atomic_canary_used=True
                                     atomic=await self.sol_chain.fetch_atomic_owner_research(address)
                                     d["solana_atomic_owner_status"]=atomic.get("status")
                                     d["solana_atomic_owner_holder_count"]=atomic.get("holder_count")
