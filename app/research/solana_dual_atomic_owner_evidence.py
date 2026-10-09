@@ -21,6 +21,11 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
     second=await collect_atomic_small_mint(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("positive_balance_coverage_proven") is not True:
         return {**denied,"status":"secondary_unverified","secondary_status":second.get("status")}
+    primary_slot=first.get("atomic_snapshot_slot")
+    secondary_slot=second.get("atomic_snapshot_slot")
+    if (type(primary_slot) is not int or type(secondary_slot) is not int
+        or abs(primary_slot-secondary_slot)>150):
+        return {**denied,"status":"cross_provider_slot_gap"}
     required=("owner_balance_digest","supply_amount","holder_count","top_10_percent",
               "largest_owner_fraction","mint_authority","freeze_authority")
     if any(first.get(k)!=second.get(k) for k in required):
