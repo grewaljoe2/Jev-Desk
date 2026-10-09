@@ -73,3 +73,32 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
     except (ValueError,TypeError,KeyError) as exc:
         known={"rate_limited","http_error","response_too_large","rpc_error"}
         return {**denied,"status":str(exc) if str(exc) in known else "invalid_rpc_response"}
+
+async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RPC,
+                                                         secondary_rpc="https://public.rpc.solanavibestation.com/",
+                                                         transport=None):
+    """Research-only: require two independent RPC views of identical owner balances.
+
+    This does not authorize production CHAIN passes. Both snapshots must
+    independently conserve supply at their respective slots, and have identical
+    per-owner balances; different snapshot slots are not silently reconciled.
+    """
+    denied={"status":"independent_confirmation_unavailable",
+            "owner_coverage_complete":False,"chain_pass_allowed":False}
+    if primary_rpc == secondary_rpc:
+        return {**denied,"status":"same_provider"}
+    first=await collect_owner_evidence(mint,rpc_url=primary_rpc,transport=transport)
+    if first.get("positive_balance_coverage_proven") is not True:
+        return {**denied,"primary_status":first.get("status")}
+    second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
+    if second.get("positive_balance_coverage_proven") is not True:
+        return {**denied,"primary_status":first.get("status"),"secondary_status":second.get("status")}
+    if first.get("accounts_slot") != second.get("accounts_slot") or first.get("supply_amount") != second.get("supply_amount"):
+        return {**denied,"status":"cross_provider_slot_or_supply_mismatch"}
+    digest=first.get("owner_balance_digest")
+    if not isinstance(digest,str) or not digest or digest!=second.get("owner_balance_digest"):
+        return {**denied,"status":"cross_provider_owner_mismatch"}
+    return {**denied,"status":"independently_correlated_research",
+            "cross_provider_owner_match":True,"positive_balance_coverage_proven":True,
+            "snapshot_slot":first["accounts_slot"],"owner_balance_digest":digest,
+            "largest_owner_fraction":first.get("largest_owner_fraction")}
