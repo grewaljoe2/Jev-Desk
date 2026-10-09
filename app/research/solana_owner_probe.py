@@ -38,5 +38,11 @@ async def probe_owner_accounts(mint, program, *, rpc_url=DEFAULT_RPC,
         snapshot=decode_rpc_snapshot(data.get("result"),mint=mint,program=program,max_accounts=max_accounts)
         return {"status":"decoded_unverified","slot":snapshot["slot"],
                 "token_accounts":len(snapshot["rows"]),"owner_coverage_complete":False}
-    except (httpx.HTTPError,ValueError,TypeError,KeyError,asyncio.TimeoutError):
-        return {"status":"unavailable_or_invalid","owner_coverage_complete":False}
+    except (httpx.TimeoutException, asyncio.TimeoutError):
+        return {"status":"timeout","owner_coverage_complete":False}
+    except httpx.ConnectError:
+        return {"status":"connection_error","owner_coverage_complete":False}
+    except httpx.HTTPError:
+        return {"status":"transport_error","owner_coverage_complete":False}
+    except (ValueError,TypeError,KeyError):
+        return {"status":"invalid_rpc_response","owner_coverage_complete":False}
