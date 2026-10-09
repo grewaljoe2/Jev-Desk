@@ -11,6 +11,8 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
                                          transport=None):
     denied={"status":"atomic_independent_unverified","owner_coverage_complete":False,
             "chain_pass_allowed":False}
+    if not isinstance(mint,str) or not mint:
+        return {**denied,"status":"invalid_mint"}
     if primary_rpc==secondary_rpc:
         return {**denied,"status":"same_provider"}
     first=await collect_atomic_small_mint(mint,rpc_url=primary_rpc,transport=transport)
@@ -23,7 +25,7 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
               "largest_owner_fraction","mint_authority","freeze_authority")
     if any(first.get(k)!=second.get(k) for k in required):
         return {**denied,"status":"cross_provider_atomic_mismatch"}
-    if not first.get("owner_balance_digest") or first.get("supply_amount",0)<=0:
+    if not first.get("owner_balance_digest") or type(first.get("supply_amount")) is not int or first["supply_amount"]<=0:
         return {**denied,"status":"missing_owner_digest"}
     return {**denied,"status":"atomic_independently_correlated_research",
             "positive_balance_coverage_proven":True,
