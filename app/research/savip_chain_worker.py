@@ -127,10 +127,16 @@ class SavipChainWorker:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
                 await self._record_attempt(row.get("token_id"),self.last_error)
                 self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) or "pending_unverified" in str(e) else "error","reason":self.last_error})
-                if "429" in str(e):
-                    self._recent_tokens[row["token_id"]]=time.monotonic()+300.0
-                else:
-                    self._recent_tokens[row["token_id"]]=time.monotonic()+120.0
+                # Provider capability/coverage failures cannot be fixed by a two-minute retry.
+                # Avoid hammering public RPCs with the same token while preserving
+                # fail-closed status and allowing new candidates to be evaluated.
+                reason_text=str(e)
+                infrastructure=("rate_limited","http_error","rpc_error","response_too_large",
+                                "timeout","transport_error","invalid_rpc_response",
+                                "snapshot_slot_mismatch","stale_supply_snapshot",
+                                "independent_confirmation_unavailable")
+                cooldown=3600.0 if any(x in reason_text for x in infrastructure) else (300.0 if "429" in reason_text else 120.0)
+                self._recent_tokens[row["token_id"]]=time.monotonic()+cooldown
                 if "solana_rpc_rate_limited_429" in str(e) or "solana_rpc_cooldown_429" in str(e):
                     # Avoid exhausting a cooling Solana RPC; other chains remain eligible.
                     continue
