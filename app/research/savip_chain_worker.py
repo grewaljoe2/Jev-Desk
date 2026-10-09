@@ -77,7 +77,12 @@ class SavipChainWorker:
                         continue
                     d["solana_wallet_rpc_status"]="pending"
                     try:
-                        sf=await self.sol_chain.fetch("solana",address)
+                        use_canary=(settings.solana_atomic_canary_enabled
+                                    and not getattr(self,"_atomic_canary_used",False))
+                        # The independent canary does not require the optional
+                        # preliminary lower-bound RPC, which may be rate-limited.
+                        sf=({"largest_token_account_fraction":None} if use_canary
+                            else await self.sol_chain.fetch("solana",address))
                         if sf:
                             lower=sf.get("largest_token_account_fraction")
                             if classify_account_lower_bound(lower)=="reject":
