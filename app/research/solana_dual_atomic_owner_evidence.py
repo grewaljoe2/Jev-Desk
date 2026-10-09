@@ -4,7 +4,7 @@ No exact cross-provider slot match is required: each snapshot has its own
 single-slot mint supply and token account balances. Matching owner digests
 and supply across snapshots are mandatory. Never authorize production CHAIN.
 """
-from app.research.solana_atomic_owner_evidence import collect_atomic_small_mint
+from app.research.solana_atomic_owner_evidence import collect_atomic_small_mint, collect_full_sliced_snapshot
 
 async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainnet-beta.solana.com",
                                          secondary_rpc="https://public.rpc.solanavibestation.com/",
@@ -16,9 +16,13 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
     if primary_rpc==secondary_rpc:
         return {**denied,"status":"same_provider"}
     first=await collect_atomic_small_mint(mint,rpc_url=primary_rpc,transport=transport)
+    if first.get("status")=="atomic_account_limit":
+        first=await collect_full_sliced_snapshot(mint,rpc_url=primary_rpc,transport=transport)
     if first.get("positive_balance_coverage_proven") is not True:
         return {**denied,"status":"primary_unverified","primary_status":first.get("status")}
     second=await collect_atomic_small_mint(mint,rpc_url=secondary_rpc,transport=transport)
+    if second.get("status")=="atomic_account_limit":
+        second=await collect_full_sliced_snapshot(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("positive_balance_coverage_proven") is not True:
         return {**denied,"status":"secondary_unverified","secondary_status":second.get("status")}
     primary_slot=first.get("atomic_snapshot_slot")
