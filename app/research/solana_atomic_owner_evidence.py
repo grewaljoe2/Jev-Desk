@@ -1,7 +1,7 @@
 """Bounded atomic Solana mint + token-account snapshot, research-only.
 
-Discover account addresses first, then read mint and up to 99 token accounts
-in ONE getMultipleAccounts response. Never infer completeness merely from
+Discover account addresses first, then read mint and token accounts in
+bounded getMultipleAccounts batches. Every batch MUST report the same slot. Never infer completeness merely from
 discovery; conservation against the mint supply at that same response slot
 is mandatory. This path intentionally does not authorize production CHAIN.
 """
@@ -44,16 +44,30 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             discovery_slot=(discovery.get("context") or {}).get("slot")
             if type(discovery_slot) is not int or discovery_slot<0:
                 return {**denied,"status":"invalid_discovery_slot"}
-            if not isinstance(accounts,list) or len(accounts)>99:
+            if not isinstance(accounts,list) or len(accounts)>299:
                 return {**denied,"status":"atomic_account_limit"}
             addresses=[item.get("pubkey") for item in accounts if isinstance(item,dict)]
             if len(addresses)!=len(accounts) or any(not isinstance(a,str) or not a for a in addresses) or len(set(addresses))!=len(addresses):
                 return {**denied,"status":"invalid_discovery"}
-            result=await rpc(client,"getMultipleAccounts",[[mint]+addresses,{"encoding":"base64","commitment":"confirmed"}])
-            slot=(result.get("context") or {}).get("slot")
-            values=result.get("value")
-            if type(slot) is not int or slot<discovery_slot or not isinstance(values,list) or len(values)!=len(addresses)+1:
-                return {**denied,"status":"invalid_atomic_response"}
+            # Each RPC call is atomic, but multiple calls are NOT automatically
+            # atomic together. Only reconcile if every batch reports one exact
+            # slot, including the mint supply. No slot interpolation is allowed.
+            batches=[[mint]+addresses[:99]]
+            batches.extend(addresses[i:i+100] for i in range(99,len(addresses),100))
+            slot=None
+            values=[]
+            for batch in batches:
+                result=await rpc(client,"getMultipleAccounts",[batch,{"encoding":"base64","commitment":"confirmed","minContextSlot":discovery_slot}])
+                batch_slot=(result.get("context") or {}).get("slot")
+                batch_values=result.get("value")
+                if (type(batch_slot) is not int or batch_slot<discovery_slot
+                    or not isinstance(batch_values,list) or len(batch_values)!=len(batch)):
+                    return {**denied,"status":"invalid_atomic_response"}
+                if slot is None:
+                    slot=batch_slot
+                elif slot!=batch_slot:
+                    return {**denied,"status":"multi_batch_slot_mismatch"}
+                values.extend(batch_values)
             if not isinstance(values[0],dict) or values[0].get("owner")!=program:
                 return {**denied,"status":"mint_program_changed"}
             mint_data=decode_mint_account(values[0],program=program)
