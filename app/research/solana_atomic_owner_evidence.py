@@ -5,7 +5,6 @@ in ONE getMultipleAccounts response. Never infer completeness merely from
 discovery; conservation against the mint supply at that same response slot
 is mandatory. This path intentionally does not authorize production CHAIN.
 """
-import base64
 import httpx
 from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_mint_account, decode_token_account
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
@@ -57,5 +56,5 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             return {**outcome,"status":"atomic_research_"+str(outcome.get("status")),
                     "atomic_snapshot_slot":slot,"discovered_accounts":len(addresses),
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
-    except (httpx.HTTPError,ValueError,TypeError,KeyError,IndexError):
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError, UnicodeError):
         return {**denied,"status":"atomic_rpc_or_decode_error"}
