@@ -30,6 +30,10 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             if not isinstance(mint_account,dict) or mint_account.get("owner") not in SUPPORTED:
                 return {**denied,"status":"invalid_mint"}
             program=mint_account["owner"]
+            # Token-2022 extensions can alter accounting semantics; scope the
+            # first real-token canary to classic SPL until extension-aware proof.
+            if program!=TOKEN_PROGRAM:
+                return {**denied,"status":"token_2022_not_yet_supported"}
             filters=[{"memcmp":{"offset":0,"bytes":mint}}]
             if program==TOKEN_PROGRAM:
                 filters.insert(0,{"dataSize":165})
