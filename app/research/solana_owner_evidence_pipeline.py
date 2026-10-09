@@ -47,7 +47,7 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             filters=[{"memcmp":{"offset":0,"bytes":mint}}]
             if program==TOKEN_PROGRAM:
                 filters.insert(0,{"dataSize":165})
-            accounts=await request(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"filters":filters}])
+            accounts=await request(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"minContextSlot":mint_slot,"filters":filters}])
             snapshot=decode_rpc_snapshot(accounts,mint=mint,program=program,max_accounts=max_accounts)
             if snapshot["slot"] < mint_slot:
                 return {**denied,"status":"stale_accounts_snapshot"}
