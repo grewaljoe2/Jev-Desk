@@ -5,6 +5,7 @@ import json
 import unittest
 import httpx
 from app.research.solana_atomic_owner_evidence import collect_atomic_small_mint, collect_full_sliced_snapshot
+from app.research.solana_dual_atomic_owner_evidence import compare_atomic_owner_snapshots
 from app.research.solana_rpc_owner_decoder import TOKEN_PROGRAM, b58encode
 
 MINT=b58encode(bytes([7])*32)
@@ -225,4 +226,42 @@ class FullSlicedSnapshotTests(unittest.TestCase):
             return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
         result=asyncio.run(collect_full_sliced_snapshot(MINT,transport=httpx.MockTransport(handler)))
         self.assertEqual(result["status"],"full_snapshot_slot_mismatch")
+        self.assertFalse(result["owner_coverage_complete"])
+
+class DualFullSnapshotIntegrationTests(unittest.TestCase):
+    def test_large_mint_dual_provider_shadow_evidence(self):
+        count=350
+        sliced=[]
+        for i in range(count):
+            raw=bytearray(77)
+            raw[:32]=i.to_bytes(32,"big")
+            raw[32:40]=(1).to_bytes(8,"little")
+            raw[76]=2
+            sliced.append({"pubkey":b58encode((i+1000).to_bytes(32,"big")),
+                           "account":{"owner":TOKEN_PROGRAM,"data":b64(raw)}})
+        def handler(request):
+            call=json.loads(request.content)
+            method=call["method"]
+            provider_offset=0 if "primary" in str(request.url) else 2
+            if method=="getAccountInfo":
+                # Initial small-mint probe, then full-snapshot before/after.
+                result={"context":{"slot":120+provider_offset},
+                        "value":mint_value(supply=count)}
+            elif method=="getProgramAccounts":
+                if call["params"][1]["dataSlice"]["length"]==0:
+                    result={"context":{"slot":120+provider_offset},
+                            "value":[{"pubkey":row["pubkey"],"account":{}} for row in sliced]}
+                else:
+                    result={"context":{"slot":120+provider_offset},"value":sliced}
+            else:
+                raise AssertionError(method)
+            return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
+        result=asyncio.run(compare_atomic_owner_snapshots(
+            MINT,primary_rpc="https://primary.invalid",secondary_rpc="https://secondary.invalid",
+            transport=httpx.MockTransport(handler)))
+        self.assertEqual(result["status"],"atomic_independently_correlated_research")
+        self.assertTrue(result["cross_provider_owner_match"])
+        self.assertTrue(result["shadow_owner_evidence_eligible"])
+        self.assertEqual(result["holder_count"],count)
+        self.assertFalse(result["chain_pass_allowed"])
         self.assertFalse(result["owner_coverage_complete"])
