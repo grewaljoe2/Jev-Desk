@@ -66,6 +66,9 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             snapshot=decode_sliced_rpc_snapshot(accounts,mint=mint,program=program,max_accounts=max_accounts)
             if snapshot["slot"] < mint_slot:
                 return {**denied,"status":"stale_accounts_snapshot"}
+            if snapshot["slot"] != mint_slot:
+                return {**denied,"status":"mint_accounts_slot_mismatch",
+                        "mint_slot":mint_slot,"accounts_slot":snapshot["slot"]}
             supply=await request(client,"getTokenSupply",[mint,{"commitment":"confirmed","minContextSlot":snapshot["slot"]}])
             amount=(supply.get("value") or {}).get("amount")
             slot=(supply.get("context") or {}).get("slot")
