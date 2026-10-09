@@ -1,13 +1,14 @@
 import unittest
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
+from app.strategy.reference_thresholds import HARD
 from app.research.solana_rpc_owner_decoder import TOKEN_2022
 
 MINT="test-mint"
 def row(account,owner,amount,slot=12):
     return {"account":account,"owner":owner,"amount":amount,"mint":MINT,"program":TOKEN_2022,"slot":slot}
-def check(rows,supply=100,slot=12,cap=0.20):
+def check(rows,supply=100,slot=12,cap=None):
     return reconcile_owner_balances({"slot":12,"rows":rows,"owner_coverage_complete":False},
-                                    mint=MINT,program=TOKEN_2022,supply_amount=supply,supply_slot=slot,cap_fraction=cap)
+                                    mint=MINT,program=TOKEN_2022,supply_amount=supply,supply_slot=slot,**({} if cap is None else {'cap_fraction':cap}))
 class ReconciliationTests(unittest.TestCase):
     def test_aggregate_same_wallet_and_reject(self):
         result=check([row("a","wallet1",30),row("b","wallet1",50),row("c","wallet2",20)])
@@ -16,9 +17,17 @@ class ReconciliationTests(unittest.TestCase):
         self.assertTrue(result["amounts_match"])
         self.assertTrue(result["provable_concentration_reject"])
         self.assertFalse(result["chain_pass_allowed"])
+    def test_frozen_five_percent_threshold(self):
+        self.assertEqual(HARD['max_top_wallet'],0.05)
+        rows=[row(str(i),str(i),5) for i in range(20)]
+        r=check(rows)
+        self.assertFalse(r['provable_concentration_reject'])
+        rows[0]['amount']=6
+        r=check(rows,supply=101)
+        self.assertTrue(r['provable_concentration_reject'])
     def test_small_owner_no_pass(self):
         result=check([row(str(i),str(i),10) for i in range(10)])
-        self.assertFalse(result["provable_concentration_reject"])
+        self.assertTrue(result["provable_concentration_reject"])
         self.assertFalse(result["chain_pass_allowed"])
     def test_partial_sum_cannot_pass(self):
         result=check([row("a","wallet",10)])
