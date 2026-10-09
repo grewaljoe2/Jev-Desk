@@ -22,6 +22,10 @@ def summarize_pool_coverage(observations):
                        "best_observed_pool_id":ranked[0]["pool_id"],
                        "best_observed_liquidity_usd":ranked[0].get("liquidity_usd"),
                        "any_experiment_eligible":any(r.get("experiment_eligible") for r in ranked),
-                       "any_newly_admitted":any(r.get("newly_admitted") for r in ranked)})
+                       "any_newly_admitted":any(r.get("newly_admitted") for r in ranked),
+                       "pool_evidence":[{"pool_id":r["pool_id"],"dex_id":r.get("dex_id") or "unknown",
+                                         "liquidity_usd":r.get("liquidity_usd"),
+                                         "source":r.get("source"),"original_discovery_gate":r.get("original_discovery_gate"),
+                                         "experiment_eligible":bool(r.get("experiment_eligible"))} for r in ranked]})
     return {"observed_pools":sum(len({r["pool_id"] for r in rows}) for rows in by_token.values()),
             "unique_tokens":len(tokens),"dex_counts":dict(by_dex),"tokens":tokens}
