@@ -58,7 +58,9 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             decimals=(supply.get("value") or {}).get("decimals")
             if not isinstance(amount,str) or not amount.isdecimal() or type(decimals) is not int or decimals != mint_data["decimals"]:
                 return {**denied,"status":"invalid_supply"}
-            if int(amount) != mint_data["amount"]:\n                return {**denied,"status":"mint_supply_mismatch"}\n            if type(slot) is not int or slot < snapshot["slot"]:
+            if int(amount) != mint_data["amount"]:
+                return {**denied,"status":"mint_supply_mismatch"}
+            if type(slot) is not int or slot < snapshot["slot"]:
                 return {**denied,"status":"stale_supply_snapshot","mint_program":program,
                         "mint_slot":mint_slot,"accounts_slot":snapshot["slot"],"supply_slot":slot}
             if slot != snapshot["slot"]:
@@ -81,7 +83,8 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
 
     This does not authorize production CHAIN passes. Both snapshots must
     independently conserve supply at their respective slots, and have identical
-    per-owner balances. Different slots require exact owner-map and supply\n    equality; no interpolation or inferred state is accepted.
+    per-owner balances. Different slots require exact owner-map and supply
+    equality; no interpolation or inferred state is accepted.
     """
     denied={"status":"independent_confirmation_unavailable",
             "owner_coverage_complete":False,"chain_pass_allowed":False}
