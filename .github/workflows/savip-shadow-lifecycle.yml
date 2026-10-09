@@ -31,3 +31,16 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_solana_pending_diagnostics.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_rpc_owner_decoder.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_owner_probe.py' -v
+      - name: TEMP one-shot bounded Solana RPC small-mint feasibility
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python - <<'PY'
+          import asyncio, json
+          from app.research.solana_rpc_owner_decoder import TOKEN_PROGRAM, b58encode
+          from app.research.solana_owner_probe import probe_owner_accounts
+          mint=b58encode(bytes([7])*32)
+          result=asyncio.run(probe_owner_accounts(mint,TOKEN_PROGRAM,timeout_seconds=12,max_bytes=200000,max_accounts=100))
+          print("SOLANA_SMALL_QUERY_RESULT="+json.dumps(result,sort_keys=True),flush=True)
+          assert result.get("owner_coverage_complete") is False
+          PY
