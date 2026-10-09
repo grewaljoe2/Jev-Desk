@@ -6,7 +6,7 @@ One request only, with response-byte cap and no retries.
 import asyncio
 import json
 import httpx
-from app.research.solana_rpc_owner_decoder import SUPPORTED, decode_rpc_snapshot
+from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_rpc_snapshot
 
 DEFAULT_RPC = "https://api.mainnet-beta.solana.com"
 
@@ -15,8 +15,11 @@ async def probe_owner_accounts(mint, program, *, rpc_url=DEFAULT_RPC,
                                max_accounts=5000, transport=None):
     if not isinstance(mint,str) or not mint or program not in SUPPORTED:
         return {"status":"invalid_request","owner_coverage_complete":False}
+    filters=[{"memcmp":{"offset":0,"bytes":mint}}]
+    if program == TOKEN_PROGRAM:
+        filters.insert(0, {"dataSize":165})
     params=[program,{"encoding":"base64","commitment":"confirmed","withContext":True,
-                     "filters":[{"memcmp":{"offset":0,"bytes":mint}}]}]
+                     "filters":filters}]
     payload={"jsonrpc":"2.0","id":1,"method":"getProgramAccounts","params":params}
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds,transport=transport) as client:
