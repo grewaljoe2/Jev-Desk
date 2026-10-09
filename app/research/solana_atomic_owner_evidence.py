@@ -51,7 +51,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                 if value is None:
                     continue
                 rows.append(decode_token_account({"pubkey":address,"account":value},mint=mint,program=program,slot=slot))
-            snapshot={"slot":slot,"rows":rows}
+            snapshot={"slot":slot,"rows":rows,"owner_coverage_complete":False}
             outcome=reconcile_owner_balances(snapshot,mint=mint,program=program,
                                              supply_amount=mint_data["amount"],supply_slot=slot)
             return {**outcome,"status":"atomic_research_"+str(outcome.get("status")),
