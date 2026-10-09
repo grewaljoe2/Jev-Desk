@@ -6,7 +6,7 @@ must agree. Matching balances do not independently certify RPC completeness.
 import asyncio
 import json
 import httpx
-from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_rpc_snapshot, decode_mint_account
+from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_rpc_snapshot, decode_sliced_rpc_snapshot, decode_mint_account
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
 
 RPC = "https://api.mainnet-beta.solana.com"
@@ -48,8 +48,8 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             filters=[{"memcmp":{"offset":0,"bytes":mint}}]
             if program==TOKEN_PROGRAM:
                 filters.insert(0,{"dataSize":165})
-            accounts=await request(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"minContextSlot":mint_slot,"filters":filters}])
-            snapshot=decode_rpc_snapshot(accounts,mint=mint,program=program,max_accounts=max_accounts)
+            accounts=await request(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"minContextSlot":mint_slot,"filters":filters,"dataSlice":{"offset":32,"length":77}}])
+            snapshot=decode_sliced_rpc_snapshot(accounts,mint=mint,program=program,max_accounts=max_accounts)
             if snapshot["slot"] < mint_slot:
                 return {**denied,"status":"stale_accounts_snapshot"}
             supply=await request(client,"getTokenSupply",[mint,{"commitment":"confirmed","minContextSlot":snapshot["slot"]}])
@@ -58,7 +58,7 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
             decimals=(supply.get("value") or {}).get("decimals")
             if not isinstance(amount,str) or not amount.isdecimal() or type(decimals) is not int or decimals != mint_data["decimals"]:
                 return {**denied,"status":"invalid_supply"}
-            if type(slot) is not int or slot < snapshot["slot"]:
+            if int(amount) != mint_data["amount"]:\n                return {**denied,"status":"mint_supply_mismatch"}\n            if type(slot) is not int or slot < snapshot["slot"]:
                 return {**denied,"status":"stale_supply_snapshot","mint_program":program,
                         "mint_slot":mint_slot,"accounts_slot":snapshot["slot"],"supply_slot":slot}
             if slot != snapshot["slot"]:
