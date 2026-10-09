@@ -30,3 +30,4 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_solana_account_lower_bound.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_pending_diagnostics.py' -v
       - run: python -m unittest discover -s tests -p 'test_solana_rpc_owner_decoder.py' -v
+      - run: python -m unittest discover -s tests -p 'test_solana_owner_probe.py' -v
