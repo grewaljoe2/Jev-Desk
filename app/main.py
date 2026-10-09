@@ -49,6 +49,29 @@ async def _helius_one_shot_research():
         allowed={"status","pages","token_accounts","unique_owners","accounts_total","slot_stable","first_slot","last_slot","reported_total_min","reported_total_max","reported_total_stable"}
         helius_research_status={k:v for k,v in result.items() if k in allowed}
         helius_research_status.update(owner_coverage_complete=False,chain_pass_allowed=False)
+        if result.get("status")=="cursor_exhausted_unverified":
+            import httpx
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    response=await client.post("https://mainnet.helius-rpc.com/",params={"api-key":key},
+                        json={"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":[mint,{"commitment":"confirmed"}]})
+                    response.raise_for_status()
+                    body=response.json()
+                supply_result=body.get("result") if isinstance(body,dict) else None
+                supply_value=supply_result.get("value") if isinstance(supply_result,dict) else None
+                amount=supply_value.get("amount") if isinstance(supply_value,dict) else None
+                supply_slot=(supply_result.get("context") or {}).get("slot") if isinstance(supply_result,dict) else None
+                if isinstance(amount,str) and amount.isdecimal() and type(supply_slot) is int:
+                    helius_research_status["supply_amount"]=int(amount)
+                    helius_research_status["supply_slot"]=supply_slot
+                    helius_research_status["account_sum_equals_supply"]=int(amount)==result.get("accounts_total")
+                    helius_research_status["supply_reconciliation_status"]=(
+                        "sum_match_non_atomic_unverified" if helius_research_status["account_sum_equals_supply"]
+                        else "sum_mismatch_unverified")
+                else:
+                    helius_research_status["supply_reconciliation_status"]="invalid_supply_response"
+            except (httpx.HTTPError,ValueError,TypeError):
+                helius_research_status["supply_reconciliation_status"]="supply_request_failed"
     except Exception:
         helius_research_status={"status":"research_exception","owner_coverage_complete":False,"chain_pass_allowed":False}
     logging.getLogger(__name__).info("helius_one_shot_research status=%s",helius_research_status["status"])
