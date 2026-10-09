@@ -35,7 +35,7 @@ def reconcile_owner_balances(snapshot, *, mint, program, supply_amount, supply_s
     largest = max(owners.values(), default=0)
     matching = total == supply_amount
     fraction = largest / supply_amount
-    # Exact conservation of all positive balances at the same slot proves that\n    # no omitted token account can hold a positive balance. This is conditional\n    # on the integrity of the RPC snapshot, not an independent provider audit.\n    covered = matching and len(accounts)>0 and largest>=0\n    return {**result, "status": "supply_conserved" if covered else "supply_mismatch",\n            "positive_balance_coverage_proven": covered,
+    # Exact conservation of all positive balances at the same slot proves that\n    # no omitted token account can hold a positive balance. This is conditional\n    # on the integrity of the RPC snapshot, not an independent provider audit.\n    covered = matching and len(accounts)>0 and largest>=0\n    return {**result, "status": "reconciled_unverified" if covered else "supply_mismatch",\n            "positive_balance_coverage_proven": covered,
             "token_accounts": len(accounts), "unique_owners": len(owners),
             "accounts_total": total, "supply_amount": supply_amount,
             "largest_owner_amount": largest, "largest_owner_fraction": fraction,
