@@ -20,6 +20,7 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
     seen_accounts=set()
     owners={}
     slots=[]
+    seen_cursors=set()
     try:
         async with httpx.AsyncClient(timeout=timeout_seconds,transport=transport) as client:
             for page in range(1,max_pages+1):
@@ -53,15 +54,15 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
                     if row["account"] in seen_accounts:return {**denied,"status":"duplicate_account","pages":page}
                     seen_accounts.add(row["account"])
                     owners[row["owner"]]=owners.get(row["owner"],0)+row["amount"]
-                next_cursor=value.get("paginationKey")
+                if "paginationKey" not in value:\n                    return {**denied,"status":"missing_pagination_key","pages":page}\n                total=value.get("totalResults")\n                if total is not None and (type(total) is not int or total<0):\n                    return {**denied,"status":"invalid_total_results","pages":page}\n                next_cursor=value["paginationKey"]
                 if next_cursor is None:
                     return {**denied,"status":"cursor_exhausted_unverified","pages":page,
                             "token_accounts":len(seen_accounts),"unique_owners":len(owners),
                             "accounts_total":sum(owners.values()),"slot_stable":len(set(slots))==1,
                             "first_slot":slots[0],"last_slot":slots[-1]}
-                if not isinstance(next_cursor,str) or not next_cursor or next_cursor==cursor:
+                if not isinstance(next_cursor,str) or not next_cursor or next_cursor in seen_cursors:
                     return {**denied,"status":"invalid_cursor","pages":page}
-                cursor=next_cursor
+                seen_cursors.add(next_cursor)\n                cursor=next_cursor
             return {**denied,"status":"page_cap_reached","pages":max_pages,"token_accounts":len(seen_accounts),
                     "slot_stable":len(set(slots))==1}
     except httpx.TimeoutException:return {**denied,"status":"timeout"}

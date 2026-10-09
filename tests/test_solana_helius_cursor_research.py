@@ -33,4 +33,16 @@ class CursorTests(unittest.TestCase):
         r=asyncio.run(collect_cursor_owner_research(MINT,api_key="test",max_pages=1,transport=httpx.MockTransport(handler)))
         self.assertEqual(r["status"],"page_cap_reached")
         self.assertFalse(r["owner_coverage_complete"])
+    def test_missing_cursor_is_not_exhaustion(self):
+        def handler(request):
+            return httpx.Response(200,json={"result":{"context":{"slot":123},"value":{"accounts":[row("a",1,50)]}}})
+        r=asyncio.run(collect_cursor_owner_research(MINT,api_key="test",transport=httpx.MockTransport(handler)))
+        self.assertEqual(r["status"],"missing_pagination_key")
+        self.assertFalse(r["chain_pass_allowed"])
+    def test_inconsistent_total_is_rejected(self):
+        def handler(request):
+            return httpx.Response(200,json={"result":{"context":{"slot":123},"value":{"accounts":[row("a",1,50)],"paginationKey":None,"totalResults":2}}})
+        r=asyncio.run(collect_cursor_owner_research(MINT,api_key="test",transport=httpx.MockTransport(handler)))
+        self.assertEqual(r["status"],"total_results_mismatch")
+        self.assertFalse(r["chain_pass_allowed"])
 if __name__=="__main__":unittest.main()
