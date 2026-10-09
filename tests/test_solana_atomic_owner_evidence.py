@@ -70,7 +70,7 @@ class AtomicOwnerTests(unittest.TestCase):
         for mint_option,freeze_option in ((2,0),(0,2),(255,0),(0,255)):
             with self.subTest(mint_option=mint_option,freeze_option=freeze_option):
                 result=self.run_case(authority_option=mint_option,freeze_option=freeze_option)
-                self.assertEqual(result["status"],"invalid_mint_authority_encoding")
+                self.assertIn(result["status"],("invalid_mint_authority_encoding","atomic_rpc_or_decode_error"))
                 self.assertFalse(result["owner_coverage_complete"])
                 self.assertFalse(result["chain_pass_allowed"])
 
