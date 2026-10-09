@@ -57,6 +57,7 @@ class SavipChainWorker:
             if row.get("chain")=="solana" and self.sol_chain.cooling_down():
                 continue
             self.last_checked+=1
+            verifier_path="not_started"
             try:
                 # Token IDs are canonical chain:address; the FREE/TRADE SQL projection
                 # does not guarantee a standalone address key.
@@ -81,6 +82,7 @@ class SavipChainWorker:
                                     and not getattr(self,"_atomic_canary_used",False))
                         # The independent canary does not require the optional
                         # preliminary lower-bound RPC, which may be rate-limited.
+                        verifier_path="atomic_canary" if use_canary else "legacy_independent"
                         sf=({"largest_token_account_fraction":None} if use_canary
                             else await self.sol_chain.fetch("solana",address))
                         if sf:
@@ -149,7 +151,7 @@ class SavipChainWorker:
                 else:self.last_kills[reason]=self.last_kills.get(reason,0)+1
             except Exception as e:
                 self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
-                await self._record_attempt(row.get("token_id"),self.last_error)
+                await self._record_attempt(row.get("token_id"),self.last_error,verifier_path)
                 self.last_candidate_results.append({"token_id":row.get("token_id"),"outcome":"retry_pending" if "429" in str(e) or "pending_unverified" in str(e) else "error","reason":self.last_error})
                 # Provider capability/coverage failures cannot be fixed by a two-minute retry.
                 # Avoid hammering public RPCs with the same token while preserving
@@ -170,12 +172,12 @@ class SavipChainWorker:
                     # dossier requests while its global 429 cooldown runs.
                     self._next_dossier_retry_at=time.monotonic()+120.0
                     break
-    async def _record_attempt(self,token_id,reason):
+    async def _record_attempt(self,token_id,reason,verifier_path="unknown"):
         if not settings.database_url or not token_id:return
         try:
             import psycopg,json
             async with await psycopg.AsyncConnection.connect(settings.database_url) as db:
-                await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES(%s,%s,%s,%s::jsonb,CURRENT_TIMESTAMP)",("SAVIP_CHAIN_ATTEMPT",token_id,"savip_reference",json.dumps({"reason":reason[:200]})))
+                await db.execute("INSERT INTO events(event_type,token_id,arm,payload_json,created_at) VALUES(%s,%s,%s,%s::jsonb,CURRENT_TIMESTAMP)",("SAVIP_CHAIN_ATTEMPT",token_id,"savip_reference",json.dumps({"reason":reason[:200],"verifier_path":verifier_path})))
                 await db.commit()
         except Exception:
             pass
