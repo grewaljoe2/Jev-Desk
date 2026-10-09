@@ -3,6 +3,7 @@ from collections import defaultdict
 
 def summarize_pool_coverage(observations):
     by_token=defaultdict(list)
+    unique_pool_rows={}
     by_dex=defaultdict(lambda: {"pools":0,"newly_admitted":0})
     for row in observations:
         token=row.get("token_id")
@@ -10,7 +11,10 @@ def summarize_pool_coverage(observations):
         if not token or not pool:
             continue
         dex=row.get("dex_id") or "unknown"
+        unique_pool_rows[(token,pool)]=row
+    for (token,pool),row in unique_pool_rows.items():
         by_token[token].append(row)
+        dex=row.get("dex_id") or "unknown"
         by_dex[dex]["pools"]+=1
         by_dex[dex]["newly_admitted"]+=bool(row.get("newly_admitted"))
     tokens=[]
