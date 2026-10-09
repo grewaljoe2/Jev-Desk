@@ -8,7 +8,7 @@ from app.strategy.reference_thresholds import HARD
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
     DISCOVERY_SEQUENCE=("solana","bsc","solana","base","solana","bsc","solana","eth")
-    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._last_429_at=0.0;self._discovery_index=0;self.last_research_observations=[];self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
+    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._last_429_at=0.0;self._discovery_index=0;self._solana_source_index=0;self.last_research_observations=[];self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
     async def _get(self,url,params=None):
         async with self._lock:
             wait=self._next_call_at-time.monotonic()
@@ -35,9 +35,13 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         network=self.DISCOVERY_SEQUENCE[self._discovery_index%len(self.DISCOVERY_SEQUENCE)]
         slot=self._discovery_index%len(self.DISCOVERY_SEQUENCE)
         self._discovery_index=(self._discovery_index+1)%len(self.DISCOVERY_SEQUENCE)
-        out=[];research=[];diag={"mode":"eligible_trending_pools_v1","network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
+        source="trending_pools"
+        if network=="solana":
+            source=("trending_pools","new_pools","trending_pools","new_pools")[self._solana_source_index%4]
+            self._solana_source_index+=1
+        out=[];research=[];diag={"mode":"mixed_trending_new_pools_v1","source":source,"network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
         try:
-            r=await self._get(f"{self.BASE}/networks/{network}/trending_pools",params={"page":1});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
+            r=await self._get(f"{self.BASE}/networks/{network}/{source}",params={"page":1});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
             rows=r.json().get("data",[]);diag["rows"]=len(rows)
             for row in rows[:20]:
                 s=self._snapshot(network,row)
@@ -47,7 +51,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
                 if network=="solana" and s.age_minutes is not None:
                     from app.research.savip_liquidity_experiment import compare_liquidity_gate
                     comparison=compare_liquidity_gate(s.model_dump())
-                    research.append({"token_id":s.token_id,"pool_id":s.raw.get("pool_id"),
+                    research.append({"token_id":s.token_id,"pool_id":s.raw.get("pool_id"),"source":source,
                                      "liquidity_usd":s.liquidity_usd,"original_discovery_gate":gate,
                                      "control_eligible":comparison.control_eligible,
                                      "experiment_eligible":comparison.experiment_eligible,
