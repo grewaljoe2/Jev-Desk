@@ -78,3 +78,8 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - PR #206 merged 9328627bc972fef54e917d427e44c45c0d991707; CI 37864627691 SUCCESS. evaluate_chain now independently refuses Solana when solana_wallet_rpc_status!='ok' or top_wallet_percent is missing; regression in tests/test_solana_chain_boundary.py. Existing limits untouched.
 - Previous PR #205 deployment dep-db436qlg1s2s7382h0p0 verified LIVE 2026-10-09 00:21:46 UTC; startup success, GET / 200.
 - Next: deploy #206 and verify. Actual complete owner enumeration remains unimplemented; no claims of genuine Solana verification or shadow fills.
+
+## 2026-10-09 Solana CHAIN defense in depth
+- PR #207 merged 730043bcfd22f8d20ec1810b9d22b08ba0f78bac, CI 37864742219 SUCCESS. app/research/savip_chain_cut.py now rejects Solana absent explicit wallet RPC status=ok and non-null top-wallet owner fraction, even if called outside the worker. ETH/BSC unchanged. New test_solana_chain_evidence_gate.py runs in CI.
+- Previous PR #205 release dep-db436qlg1s2s7382h0p0 LIVE commit 65b899d7d8e7835a5d759790050cbe691878e87c; startup 00:21:41 UTC and GET / 200 00:21:46 UTC.
+- Still missing: a proven no-cost owner-complete collector with coherent Solana snapshot; public getTokenLargestAccounts cannot certify wallet owner concentration. Do not loosen gate, enable paid calls, or claim Solana verified.
