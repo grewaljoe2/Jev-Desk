@@ -20,6 +20,9 @@ class SavipChainProvider:
         # A failed RPC must never be interpreted as a clean wallet check.
         if self.cooling_down():
             raise RuntimeError("solana_rpc_cooldown_429")
+        if self._active_rpc==self.FALLBACK_RPC and time.monotonic()>=self._cooldown_until and self._cooldown_until>0:
+            self._active_rpc=self.SOL_RPC
+            self._cooldown_until=0.0
         supply=await self._rpc("getTokenSupply",[address,{"commitment":"confirmed"}])
         largest=await self._rpc("getTokenLargestAccounts",[address,{"commitment":"confirmed"}])
         total=int((supply or {}).get("value",{}).get("amount") or 0)
