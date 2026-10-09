@@ -94,7 +94,7 @@ class SavipChainProvider:
             first,second=scans
             fields=("account_balance_digest","owner_balance_digest","accounts_total",
                     "token_accounts","holder_count","largest_owner_amount","top_10_owner_amount")
-            if any(first.get(field) is None or first.get(field)!=second.get(field) for field in fields):
+            if not first.get("slot_stable") or not second.get("slot_stable"):\n                return {**denied,"status":"non_atomic_cursor_scan"}\n            if any(first.get(field) is None or first.get(field)!=second.get(field) for field in fields):
                 return {**denied,"status":"unstable_owner_map"}
             async with httpx.AsyncClient(timeout=12) as client:
                 async def rpc(method,params):
