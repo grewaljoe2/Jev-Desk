@@ -4,6 +4,8 @@ This collector is intentionally NOT a CHAIN approval source. Cursor exhaustion
 is not an atomic snapshot and does not prove supply conservation.
 """
 import httpx
+import hashlib
+import json
 from app.research.solana_rpc_owner_decoder import TOKEN_PROGRAM, TOKEN_2022, decode_sliced_rpc_snapshot
 
 async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
@@ -19,6 +21,7 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
     cursor=None
     seen_accounts=set()
     owners={}
+    account_balances={}
     slots=[]
     totals=[]
     seen_cursors=set()
@@ -54,6 +57,7 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
                 for row in snapshot["rows"]:
                     if row["account"] in seen_accounts:return {**denied,"status":"duplicate_account","pages":page}
                     seen_accounts.add(row["account"])
+                    account_balances[row["account"]]=(row["owner"],row["amount"])
                     owners[row["owner"]]=owners.get(row["owner"],0)+row["amount"]
                 if "paginationKey" not in value:
                     return {**denied,"status":"missing_pagination_key","pages":page}
@@ -64,8 +68,16 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
                     totals.append(total)
                 next_cursor=value["paginationKey"]
                 if next_cursor is None:
+                    owner_digest=hashlib.sha256(json.dumps(sorted(owners.items()),separators=(",",":")).encode()).hexdigest()
+                    account_digest=hashlib.sha256(json.dumps(sorted((k,*v) for k,v in account_balances.items()),separators=(",",":")).encode()).hexdigest()
+                    positive=sorted((x for x in owners.values() if x>0),reverse=True)
                     return {**denied,"status":"cursor_exhausted_unverified","pages":page,
                             "token_accounts":len(seen_accounts),"unique_owners":len(owners),
+                            "holder_count":len(positive),
+                            "largest_owner_amount":positive[0] if positive else 0,
+                            "top_10_owner_amount":sum(positive[:10]),
+                            "owner_balance_digest":owner_digest,
+                            "account_balance_digest":account_digest,
                             "accounts_total":sum(owners.values()),"slot_stable":len(set(slots))==1,
                             "first_slot":slots[0],"last_slot":slots[-1],
                             "reported_total_min":min(totals) if totals else None,
