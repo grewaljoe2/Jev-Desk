@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from app.research.savip_trade_cut import exact_trade_cut
 from app.storage.db import savip_candidate_pool,open_savip_positions, savip_recent_chain_tokens
 from app.research.savip_chain_cut import evaluate_chain
+from app.research.solana_account_lower_bound import classify_account_lower_bound
 from app.core.config import settings
 
 class SavipChainWorker:
@@ -58,6 +59,15 @@ class SavipChainWorker:
                     try:
                         sf=await self.sol_chain.fetch("solana",address)
                         if sf:
+                            lower=sf.get("largest_token_account_fraction")
+                            if classify_account_lower_bound(lower)=="reject":
+                                d["solana_largest_account_fraction"]=lower
+                                d["solana_wallet_rpc_status"]="account_lower_bound_reject"
+                                await self._persist(row["token_id"],d,False,"top_wallet_lower_bound")
+                                self.last_kills["top_wallet_lower_bound"]=self.last_kills.get("top_wallet_lower_bound",0)+1
+                                self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"kill","reason":"top_wallet_lower_bound"})
+                                self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
+                                continue
                             d["top_wallet_percent"]=sf.get("top_wallet_fraction") if sf.get("owner_coverage_complete") is True else None
                             d["solana_wallet_rpc_status"]="ok" if sf.get("owner_coverage_complete") is True else "unverified_owner_coverage"
                     except RuntimeError as rpc_error:
