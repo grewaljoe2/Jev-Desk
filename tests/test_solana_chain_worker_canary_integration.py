@@ -2,6 +2,8 @@
 import asyncio
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
+from app.research import savip_chain_worker as chain_worker_module
 from app.research.savip_chain_worker import SavipChainWorker
 
 TOKEN="solana:TestMint"
@@ -54,7 +56,7 @@ class ChainWorkerCanaryIntegrationTests(unittest.TestCase):
              patch("app.research.savip_chain_worker.savip_candidate_pool",pool),\
              patch("app.research.savip_chain_worker.exact_trade_cut",trade),\
              patch("app.research.savip_chain_worker.savip_recent_chain_tokens",recent),\
-             patch("app.research.savip_chain_worker.settings.solana_atomic_canary_enabled",True):
+             patch.object(chain_worker_module,"settings",SimpleNamespace(solana_atomic_canary_enabled=True,database_url=None)):
             asyncio.run(worker.run_cycle())
         return worker,sol,persisted
 
