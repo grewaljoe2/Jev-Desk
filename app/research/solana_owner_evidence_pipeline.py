@@ -91,6 +91,8 @@ async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RP
     if first.get("positive_balance_coverage_proven") is not True:
         return {**denied,"primary_status":first.get("status")}
     second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
+    if second.get("status") in ("snapshot_slot_mismatch","stale_supply_snapshot"):
+        second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("positive_balance_coverage_proven") is not True:
         return {**denied,"primary_status":first.get("status"),"secondary_status":second.get("status")}
     if first.get("accounts_slot") != second.get("accounts_slot") or first.get("supply_amount") != second.get("supply_amount"):
