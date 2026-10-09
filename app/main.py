@@ -1,3 +1,6 @@
+import asyncio
+import logging
+import os
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from app.core.config import settings
@@ -32,6 +35,24 @@ from app.research.replay_diagnostics import replay_diagnostics
 from app.research.qualification import qualification_diagnostics
 
 app=FastAPI(title=settings.app_name,version=settings.version)
+helius_research_status={"status":"not_run","owner_coverage_complete":False,"chain_pass_allowed":False}
+async def _helius_one_shot_research():
+    global helius_research_status
+    from app.research.solana_helius_cursor_research import collect_cursor_owner_research
+    key=os.environ.get("HELIUS_API_KEY","")
+    mint=os.environ.get("HELIUS_RESEARCH_MINT","")
+    if not key or not mint:
+        helius_research_status={"status":"not_configured","owner_coverage_complete":False,"chain_pass_allowed":False}
+        return
+    try:
+        result=await collect_cursor_owner_research(mint,api_key=key,max_pages=3,page_size=1000,timeout_seconds=10)
+        allowed={"status","pages","token_accounts","unique_owners","accounts_total","slot_stable","first_slot","last_slot"}
+        helius_research_status={k:v for k,v in result.items() if k in allowed}
+        helius_research_status.update(owner_coverage_complete=False,chain_pass_allowed=False)
+    except Exception:
+        helius_research_status={"status":"research_exception","owner_coverage_complete":False,"chain_pass_allowed":False}
+    logging.getLogger(__name__).info("helius_one_shot_research status=%s",helius_research_status["status"])
+
 provider=GeckoTerminalDiscovery()
 dex_provider=DexScreenerProvider()
 savip_dossier_provider=SavipDossierProvider(provider)
@@ -67,6 +88,11 @@ async def startup():
     savip_pick_worker.start()
     savip_shadow_entry_worker.start()
     savip_shadow_risk_worker.start()
+    asyncio.create_task(_helius_one_shot_research())
+
+@app.get("/solana-research-status")
+async def solana_research_status():
+    return {"shadow_only":True,**helius_research_status}
 
 @app.get("/health")
 async def health():
