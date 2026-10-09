@@ -47,6 +47,17 @@ class OwnerProbeTests(unittest.TestCase):
                              max_bytes=20)["status"],"response_too_large")
     def test_rpc_error(self):
         self.assertEqual(run(lambda req:httpx.Response(200,json={"error":{"code":-32005}}))["status"],"rpc_error")
+    def test_timeout_distinguished(self):
+        def handler(request):
+            raise httpx.ReadTimeout("simulated")
+        self.assertEqual(run(handler)["status"],"timeout")
+    def test_connection_error_distinguished(self):
+        def handler(request):
+            raise httpx.ConnectError("simulated")
+        self.assertEqual(run(handler)["status"],"connection_error")
+    def test_invalid_rpc_response_distinguished(self):
+        self.assertEqual(run(lambda req:httpx.Response(200,content=b"not-json"))["status"],
+                         "invalid_rpc_response")
     def test_invalid_program_no_network(self):
         result=asyncio.run(probe_owner_accounts(MINT,"invalid"))
         self.assertEqual(result["status"],"invalid_request")
