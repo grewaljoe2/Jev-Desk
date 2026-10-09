@@ -17,9 +17,15 @@ async def main():
             "supply_conserved":result.get("positive_balance_coverage_proven",False),
             "chain_pass_allowed":False},sort_keys=True),flush=True)
 
-    confirmed=await collect_independently_confirmed_owner_evidence(MINT)
-    print("CROSS_PROVIDER_RETEST="+json.dumps({k:v for k,v in confirmed.items() if k!="owner_balance_digest"},sort_keys=True),flush=True)
-    assert confirmed["chain_pass_allowed"] is False
+    for attempt in range(1,4):
+        confirmed=await collect_independently_confirmed_owner_evidence(MINT)
+        print("CROSS_PROVIDER_RETEST="+json.dumps({"attempt":attempt,**{k:v for k,v in confirmed.items() if k!="owner_balance_digest"}},sort_keys=True),flush=True)
+        assert confirmed["chain_pass_allowed"] is False
+        assert confirmed["owner_coverage_complete"] is False
+        if confirmed.get("cross_provider_owner_match") is True:
+            break
+        if attempt < 3:
+            await asyncio.sleep(3)
 
 if __name__=="__main__":
     asyncio.run(main())
