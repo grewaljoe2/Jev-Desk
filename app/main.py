@@ -55,20 +55,6 @@ active_trade_worker=ActiveTradeWorker(provider,seconds=15)
 @app.on_event("startup")
 async def startup():
     await init_db()
-    # TEMPORARY one-shot deployment diagnostic; remove after sanitized log capture.
-    # Read-only, bounded, no public route, never permits CHAIN approval.
-    import os
-    if os.environ.get("HELIUS_API_KEY"):
-        import asyncio
-        import json
-        from app.research.helius_schema_probe import probe
-        async def _helius_startup_probe():
-            try:
-                result = await asyncio.wait_for(probe(), timeout=65)
-                print("HELIUS_ONESHOT_DIAGNOSTIC " + json.dumps(result, sort_keys=True), flush=True)
-            except Exception as exc:
-                print("HELIUS_ONESHOT_DIAGNOSTIC " + json.dumps({"status": "probe_exception", "type": type(exc).__name__, "chain_pass_allowed": False}), flush=True)
-        asyncio.create_task(_helius_startup_probe())
     scheduler.start()
     # Keep 5m pool qualification: its SNAPSHOT facts feed Savip FREE CUT.
     qualification_worker.start()
