@@ -93,3 +93,8 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - PR #209 merged 9985bfab3b0088c031353803c3845dfbe6a5ba8d, CI 37865267467 SUCCESS. Solana owner-incomplete attempt now appears as retry_pending instead of generic error; remains blocked and does not trade. No changes to calls/thresholds.
 - PR #208 deployment dep-db43anrncjis73bko800 LIVE commit 8807c2b7550dcd5bebaf18bef2d4e0c12d0f7484; startup 00:29:57 UTC and GET / 200 at 00:30:07 UTC.
 - Still need real owner-aware complete collector. Avoid repeated small diagnostics-only PRs; prioritize actual upstream verification feasibility and throughput.
+
+## 2026-10-09 Solana offline owner RPC decoder
+- PR #210 merged 5b92b193228e550dec880e8747edd1647112e187, CI run 37865912820 SUCCESS. Adds app/research/solana_rpc_owner_decoder.py with bounded getProgramAccounts withContext parser, mint/program/slot checks, owner pubkey from token account data bytes 32:64, raw amount bytes 64:72, initialized state and duplicate account checks. Eight offline regression tests. Explicit owner_coverage_complete=False.
+- This is NOT a network collector and cannot pass Solana CHAIN. Next: bounded opt-in read-only feasibility probe against free RPC, and independently justified complete snapshot proof before any owner pass. Never equate token-program account.owner to wallet owner.
+- PR #209 release dep-db43e6bbc2fs73afha8g LIVE commit e9b14c6d5c17bb0ae30ecd10aebf55f4a569b01b (Render confirmed); no paid calls or live execution.
