@@ -36,8 +36,8 @@ jobs:
           python - <<'PY'
           import asyncio,json
           from app.research.solana_owner_probe import probe_owner_accounts
-          from app.research.solana_rpc_owner_decoder import TOKEN_2022_PROGRAM
-          result=asyncio.run(probe_owner_accounts("2JxdiEFs3K8tVtWp4Q3SK6RGNwLJaRRNmX63y3Xnpump",TOKEN_2022_PROGRAM,timeout_seconds=12,max_bytes=2000000,max_accounts=5000))
+          from app.research.solana_rpc_owner_decoder import TOKEN_2022
+          result=asyncio.run(probe_owner_accounts("2JxdiEFs3K8tVtWp4Q3SK6RGNwLJaRRNmX63y3Xnpump",TOKEN_2022,timeout_seconds=12,max_bytes=2000000,max_accounts=5000))
           print("TOKEN2022_RESULT="+json.dumps(result,sort_keys=True),flush=True)
           assert result["owner_coverage_complete"] is False
           PY
