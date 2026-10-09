@@ -24,6 +24,22 @@ class IndependentOwnerSlotTests(unittest.TestCase):
         self.assertEqual(result["status"],"independently_correlated_research")
         self.assertFalse(result["chain_pass_allowed"])
         self.assertFalse(result["owner_coverage_complete"])
+    def test_mint_account_mismatch_retries_once_then_denies(self):
+        failure={"status":"mint_accounts_slot_mismatch","positive_balance_coverage_proven":False}
+        with patch("app.research.solana_owner_evidence_pipeline.collect_owner_evidence",
+                   new=AsyncMock(side_effect=[failure,failure])) as collector:
+            result=asyncio.run(collect_independently_confirmed_owner_evidence("test-mint"))
+        self.assertEqual(result["failed_provider"],"primary")
+        self.assertEqual(result["primary_status"],"mint_accounts_slot_mismatch")
+        self.assertEqual(collector.await_count,2)
+    def test_mint_account_mismatch_retry_can_recover(self):
+        failure={"status":"mint_accounts_slot_mismatch","positive_balance_coverage_proven":False}
+        with patch("app.research.solana_owner_evidence_pipeline.collect_owner_evidence",
+                   new=AsyncMock(side_effect=[failure,evidence(100),evidence(100)])) as collector:
+            result=asyncio.run(collect_independently_confirmed_owner_evidence("test-mint"))
+        self.assertEqual(result["status"],"independently_correlated_research")
+        self.assertFalse(result["chain_pass_allowed"])
+        self.assertEqual(collector.await_count,3)
     def test_same_provider_is_denied(self):
         result=asyncio.run(collect_independently_confirmed_owner_evidence(
             "test-mint",primary_rpc="https://same",secondary_rpc="https://same"))
