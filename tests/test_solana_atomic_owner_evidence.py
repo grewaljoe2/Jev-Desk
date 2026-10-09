@@ -190,6 +190,27 @@ class FullSlicedSnapshotTests(unittest.TestCase):
         self.assertEqual(result["discovered_accounts"],count)
         self.assertFalse(result["chain_pass_allowed"])
 
+    def test_bracketed_supply_across_distinct_slots(self):
+        raw=bytearray(77)
+        raw[:32]=bytes([8])*32
+        raw[32:40]=(100).to_bytes(8,"little")
+        raw[76]=2
+        calls=[0]
+        def handler(request):
+            method=json.loads(request.content)["method"]
+            if method=="getProgramAccounts":
+                result={"context":{"slot":121},"value":[{"pubkey":ACCOUNT,
+                    "account":{"owner":TOKEN_PROGRAM,"data":b64(raw)}}]}
+            else:
+                calls[0]+=1
+                result={"context":{"slot":120 if calls[0]==1 else 122},
+                        "value":mint_value(supply=100)}
+            return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
+        result=asyncio.run(collect_full_sliced_snapshot(MINT,transport=httpx.MockTransport(handler)))
+        self.assertTrue(result["positive_balance_coverage_proven"])
+        self.assertEqual((result["mint_before_slot"],result["atomic_snapshot_slot"],result["mint_after_slot"]),(120,121,122))
+        self.assertFalse(result["chain_pass_allowed"])
+
     def test_sliced_slot_mismatch_fails_closed(self):
         raw=bytearray(77)
         raw[32:40]=(100).to_bytes(8,"little")
