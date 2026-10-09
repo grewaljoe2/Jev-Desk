@@ -50,3 +50,8 @@ Continue Savip/Jev Desk from docs/SAVIP_HANDOFF_2026-10-08_LATEST.md in GitHub g
 - Render read-only SQL tool cannot connect to free Postgres dpg-db2sq2qd0e5s73ea0dd0-a because external IP allowlist is empty. Preserve security; do not open IP access just for inspection.
 - Last verified live Render deployment dep-db42npmb7d7c73a57ej0 at 4c59eab, startup success and GET / 200. #203 deployment needs verification.
 - Both standalone switches remain default OFF, no paid model calls enabled, no real trading. Genuine shadow BOOK fill still unverified.
+
+## 2026-10-08 PR #204
+- PR #204 merged cde9cc227a7b1fcfb183c1114ce534c1da62f483; CI 37862904641 SUCCESS. Standalone atomic BOOK commit now receives validated fresh observed liquidity and rechecks ticket against it rather than stale Jev dossier liquidity. Malformed evidence/social fail closed. No flags enabled.
+- PR #203 deployment dep-db42pdad0e5s73fjrkig confirmed LIVE at e536b85331345940fe889037bc63e537edbc55d9; app startup complete, GET / HTTP 200.
+- Next: deploy #204 and verify startup, investigate internal-only read-only DB observability, then genuine end-to-end shadow fill and Postgres concurrency tests. Do not change external DB allowlist, enable paid eligibility, or turn on real execution.
