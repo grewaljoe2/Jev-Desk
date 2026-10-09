@@ -61,6 +61,20 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                 rows=result["token_accounts"]
                 if len(rows)>page_size:
                     return {**denied,"status":"oversized_page","pages":pages}
+                # Helius documents exhaustion as an empty page, not a
+                # total-count boundary. Keep all observations research-only.
+                if not rows:
+                    if not seen:
+                        return {**denied,"status":"empty_index","pages":page,
+                                "token_accounts":0}
+                    digest=hashlib.sha256(json.dumps(sorted(owners.items()),separators=(",",":")).encode()).hexdigest()
+                    return {**denied,"status":"empty_page_exhausted_unverified",
+                            "pages":page,"token_accounts":len(seen),
+                            "last_indexed_slot":indexed_slot,
+                            "indexed_total":expected_total,
+                            "unique_owners":len(owners),"accounts_total":total,
+                            "largest_owner_amount":max(owners.values(),default=0),
+                            "owner_balance_digest":digest}
                 for row in rows:
                     if not isinstance(row,dict) or row.get("mint")!=mint:
                         return {**denied,"status":"mint_mismatch","pages":pages}
@@ -73,25 +87,6 @@ async def collect_indexed_owner_research(mint, *, api_key, max_pages=10,
                     owners[owner]+=amount
                     total+=amount
                 pages=page
-                if len(seen)>expected_total:
-                    return {**denied,"status":"index_total_exceeded","pages":pages}
-                if len(rows)<page_size and len(seen)!=expected_total:
-                    return {**denied,"status":"index_total_mismatch","pages":pages}
-                # A provider-reported total equal to a completely full page may
-                # be a capped page count, not a global token-account count.
-                # Never treat that boundary as an exhausted owner index.
-                if len(seen)==expected_total and len(rows)==page_size:
-                    return {**denied,"status":"full_page_total_ambiguous",
-                            "pages":pages,"token_accounts":len(seen),
-                            "indexed_total":expected_total,"last_indexed_slot":indexed_slot}
-                if len(seen)==expected_total:
-                    digest=hashlib.sha256(json.dumps(sorted(owners.items()),separators=(",",":")).encode()).hexdigest()
-                    return {**denied,"status":"indexed_pages_exhausted_unverified",
-                            "pages":pages,"token_accounts":len(seen),
-                            "last_indexed_slot":indexed_slot,"indexed_total":expected_total,
-                            "unique_owners":len(owners),"accounts_total":total,
-                            "largest_owner_amount":max(owners.values(),default=0),
-                            "owner_balance_digest":digest}
             return {**denied,"status":"page_cap_reached","pages":pages,
                     "token_accounts":len(seen)}
     except httpx.TimeoutException:
