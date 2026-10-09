@@ -2,7 +2,7 @@
 import base64
 import unittest
 from app.research.solana_rpc_owner_decoder import (
-    TOKEN_PROGRAM, b58encode, decode_rpc_snapshot, decode_token_account
+    TOKEN_PROGRAM, TOKEN_2022, b58encode, decode_rpc_snapshot, decode_token_account, decode_mint_account
 )
 
 MINT = bytes([7]) * 32
@@ -52,3 +52,16 @@ class DecoderTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+class MintDecoderTests(unittest.TestCase):
+    def test_initialized_classic_mint(self):
+        raw=bytearray(82)
+        raw[36:44]=(100).to_bytes(8,"little")
+        raw[44]=6
+        raw[45]=1
+        value={"owner":TOKEN_PROGRAM,"data":[base64.b64encode(raw).decode(),"base64"]}
+        self.assertEqual(decode_mint_account(value,program=TOKEN_PROGRAM),{"amount":100,"decimals":6})
+    def test_malformed_mint_fails_closed(self):
+        value={"owner":TOKEN_2022,"data":["not_base64!","base64"]}
+        with self.assertRaises(ValueError):
+            decode_mint_account(value,program=TOKEN_2022)
