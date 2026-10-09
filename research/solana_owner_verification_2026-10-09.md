@@ -93,3 +93,7 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Current `collect_independently_confirmed_owner_evidence` intentionally returns both flags False, so this change **blocks** the former research-only promotion. This is safety correction, **not a working verification solution**.
 - Commit `8f4c55c` updates mocked provider tests: research correlation denied, one approval flag insufficient, explicit flags + valid evidence positive control. **New test expectations not execution-verified.**
 - Do not merge until real independent owner-coverage contract is established and full-source integration passes.
+
+## Offline approval-boundary rerun
+- Executed 25 isolated reconstructed local unittest cases after adapting local provider logic and tests to research approval-boundary commits `848778b` and `8f4c55c`: **25/25 passed**. An initial run failed two tests because local provider copy was stale; synchronized the local approval checks and reran successfully.
+- No full GitHub checkout, live RPC snapshot certification, or end-to-end CHAIN pass was performed. Production remains unchanged.
