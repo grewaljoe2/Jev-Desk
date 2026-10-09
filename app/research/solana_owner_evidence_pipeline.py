@@ -73,3 +73,28 @@ async def collect_owner_evidence(mint, *, rpc_url=RPC, timeout_seconds=12,
     except (ValueError,TypeError,KeyError) as exc:
         known={"rate_limited","http_error","response_too_large","rpc_error"}
         return {**denied,"status":str(exc) if str(exc) in known else "invalid_rpc_response"}
+
+async def collect_independently_confirmed_owner_evidence(mint, *, primary_rpc=RPC,
+                                                         secondary_rpc="https://public.rpc.solanavibestation.com/",
+                                                         transport=None):
+    """Research-only: require two independent RPC views of identical owner balances.
+
+    This does not authorize production CHAIN passes. Both snapshots must
+    independently conserve supply at their respective slots, and have identical
+    per-owner balances; different snapshot slots are not silently reconciled.
+    """
+    denied={"status":"independent_confirmation_unavailable",
+            "owner_coverage_complete":False,"chain_pass_allowed":False}
+    if primary_rpc == secondary_rpc:
+        return {**denied,"status":"same_provider"}
+    first=await collect_owner_evidence(mint,rpc_url=primary_rpc,transport=transport)
+    if first.get("positive_balance_coverage_proven") is not True:
+        return {**denied,"primary_status":first.get("status")}
+    second=await collect_owner_evidence(mint,rpc_url=secondary_rpc,transport=transport)
+    if second.get("positive_balance_coverage_proven") is not True:
+        return {**denied,"primary_status":first.get("status"),"secondary_status":second.get("status")}
+    # Aggregate values are insufficient to establish identical owner sets.
+    # A stronger confirmation must compare owner identities and balances,
+    # not only the top-wallet percentage or account count.
+    return {**denied,"status":"aggregate_only_unverified",
+            "primary_status":first.get("status"),"secondary_status":second.get("status")}
