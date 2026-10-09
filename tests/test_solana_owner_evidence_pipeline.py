@@ -32,8 +32,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(c[2]["params"][1]["minContextSlot"],123)
     def test_supply_slot_mismatch_fails_closed(self):
         r,c=run(supply_slot=124)
-        self.assertEqual(r["status"],"invalid_evidence")
+        self.assertEqual(r["status"],"snapshot_slot_mismatch")
         self.assertFalse(r["chain_pass_allowed"])
+    def test_stale_supply_slot_is_diagnosed(self):
+        r,c=run(supply_slot=122)
+        self.assertEqual(r["status"],"stale_supply_snapshot")
+        self.assertFalse(r["chain_pass_allowed"])
+        self.assertEqual(r["accounts_slot"],123)
+        self.assertEqual(r["supply_slot"],122)
     def test_supply_mismatch_fails_closed(self):
         r,c=run(supply="101")
         self.assertEqual(r["status"],"supply_mismatch")
