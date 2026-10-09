@@ -17,7 +17,7 @@ def b58encode(data):
     while number:
         number, digit = divmod(number, 58)
         chars = ALPHABET[digit] + chars
-    return "1" * (len(data) - len(data.lstrip(b"\\0"))) + chars
+    return "1" * (len(data) - len(data.lstrip(bytes([0])))) + chars
 
 def decode_token_account(item, *, mint, program, slot):
     """Decode one full base64 SPL token account; raise ValueError on any ambiguity."""
