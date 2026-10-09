@@ -8,7 +8,7 @@ from app.strategy.reference_thresholds import HARD
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
     DISCOVERY_SEQUENCE=("solana","bsc","solana","base","solana","bsc","solana","eth")
-    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._last_429_at=0.0;self._discovery_index=0;self._solana_source_index=0;self.last_research_observations=[];self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
+    def __init__(self): self.last_diagnostics={};self._lock=asyncio.Lock();self._next_call_at=0.0;self._entry_pressure=False;self._last_429_at=0.0;self._discovery_index=0;self._solana_source_index=0;self.last_research_observations=[];self._research_history={};self._client=httpx.AsyncClient(timeout=15,headers={"Accept":"application/json","User-Agent":"JevDesk/0.6.2"})
     async def _get(self,url,params=None):
         async with self._lock:
             wait=self._next_call_at-time.monotonic()
@@ -57,6 +57,12 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
                                      "experiment_eligible":comparison.experiment_eligible,
                                      "newly_admitted":comparison.newly_admitted})
         except Exception as e:diag["error"]=f"{type(e).__name__}: {str(e)[:180]}"
+        from app.research.savip_pool_coverage import summarize_pool_coverage
+        for item in research:
+            self._research_history[(item["token_id"],item["pool_id"])]=item
+        while len(self._research_history)>500:
+            self._research_history.pop(next(iter(self._research_history)))
+        diag["pool_coverage"]=summarize_pool_coverage(self._research_history.values())
         diag["research_observed"]=len(research)
         diag["research_newly_admitted"]=sum(x["newly_admitted"] for x in research)
         self.last_research_observations=research
