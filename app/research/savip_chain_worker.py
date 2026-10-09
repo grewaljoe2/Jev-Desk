@@ -75,8 +75,15 @@ class SavipChainWorker:
                                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"kill","reason":"top_wallet_lower_bound"})
                                 self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
                                 continue
-                            d["top_wallet_percent"]=sf.get("top_wallet_fraction") if sf.get("owner_coverage_complete") is True else None
-                            d["solana_wallet_rpc_status"]="ok" if sf.get("owner_coverage_complete") is True else "unverified_owner_coverage"
+                            verified=await self.sol_chain.fetch_independent_owner_evidence(address)
+                            if verified.get("owner_coverage_complete") is True:
+                                d["top_wallet_percent"]=verified["top_wallet_fraction"]
+                                d["solana_wallet_rpc_status"]="ok"
+                                d["solana_owner_evidence_source"]=verified.get("source")
+                            else:
+                                d["top_wallet_percent"]=None
+                                d["solana_wallet_rpc_status"]="unverified_owner_coverage"
+                                d["solana_owner_evidence_status"]=verified.get("status")
                     except RuntimeError as rpc_error:
                         if "solana_rpc_" not in str(rpc_error):raise
                         # The GT dossier is still valid; do not claim the wallet check passed.
