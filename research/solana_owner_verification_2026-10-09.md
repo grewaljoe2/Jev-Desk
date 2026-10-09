@@ -50,3 +50,9 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Executed `cd /mnt/data/jev_offline && python -m unittest discover -s tests -p 'test_helius_collector_rpc.py' -v`: **9 tests ran, 9 passed** (0.008s).
 - Tested: same-slot still diagnostic, mixed-slot still diagnostic, duplicate account, missing cursor, page cap, 429, wrong program, Token-2022 diagnostic, 10k page-size acceptance.
 - **Scope limitation:** This is a manually reconstructed copy, not a verified byte-identical Git checkout or GitHub CI run. No full worker/pipeline integration tested. No consistent complete ownership-map certification demonstrated. Production release gate remains BLOCKED.
+
+## Collector reported-total hardening (2026-10-09)
+- Identified that prior collector returned `cursor_exhausted_unverified` even when provider `totalResults` varied between pages or disagreed with unique collected account count. This was diagnostic-only but misleading.
+- Research branch commits `dfda3b9` and `29815c3` now fail closed with `inconsistent_reported_total` or `reported_total_account_mismatch`, with two additional mocked-RPC tests.
+- Executed 11/11 tests locally against the reconstructed collector after equivalent code edits. **Not CI or full-repo checkout verification**; no owner-map certification and no CHAIN approval.
+- Potential caveat: provider `totalResults` semantics must be independently checked against Helius contract before treating mismatch as a permanent invalidity rather than a transient retryable inconsistency. No production deployment.
