@@ -76,6 +76,17 @@ class SavipChainProvider:
                 "holder_count":holders,"top_10_percent":float(top10),
                 "status":"independently_verified","source":"solana_independent_owner_evidence"}
 
+    async def fetch_atomic_owner_research(self,address):
+        """Bounded dual-RPC canary diagnostics, never CHAIN approval."""
+        from app.research.solana_dual_atomic_owner_evidence import compare_atomic_owner_snapshots
+        try:
+            result=await compare_atomic_owner_snapshots(
+                address,primary_rpc=self.SOL_RPC,secondary_rpc=self.FALLBACK_RPC)
+            return {**result,"chain_pass_allowed":False,"owner_coverage_complete":False}
+        except Exception:
+            return {"status":"atomic_owner_research_exception",
+                    "chain_pass_allowed":False,"owner_coverage_complete":False}
+
     async def fetch_helius_owner_evidence(self,address):
         """Cross-check Helius owner-map research against an independent supply RPC.
 
