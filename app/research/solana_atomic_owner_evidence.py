@@ -24,6 +24,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
         if not isinstance(body,dict) or "error" in body or not isinstance(body.get("result"),dict):
             raise ValueError("invalid_rpc")
         return body["result"]
+    stage="getAccountInfo"
     try:
         async with httpx.AsyncClient(timeout=timeout,transport=transport) as client:
             info=await rpc(client,"getAccountInfo",[mint,{"encoding":"base64","commitment":"confirmed"}])
@@ -38,6 +39,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             filters=[{"memcmp":{"offset":0,"bytes":mint}}]
             if program==TOKEN_PROGRAM:
                 filters.insert(0,{"dataSize":165})
+            stage="getProgramAccounts"
             discovery=await rpc(client,"getProgramAccounts",[program,{"encoding":"base64","commitment":"confirmed","withContext":True,"filters":filters,"dataSlice":{"offset":0,"length":0}}])
             accounts=discovery.get("value")
             # A provider may serve an older snapshot after discovery; conservation
@@ -58,6 +60,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             # Issue bounded reads concurrently to improve the chance of a
             # shared bank slot. Concurrency never substitutes for the exact
             # slot check below; every response is independently validated.
+            stage="getMultipleAccounts"
             results=await asyncio.gather(*(rpc(client,"getMultipleAccounts",
                 [batch,{"encoding":"base64","commitment":"confirmed",
                         "minContextSlot":discovery_slot}]) for batch in batches))
@@ -99,8 +102,15 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                     "mint_authority":mint_authority_open,"freeze_authority":freeze_authority_open,
                     "owner_balance_digest":outcome.get("owner_balance_digest"),
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
-    except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError, UnicodeError):
-        return {**denied,"status":"atomic_rpc_or_decode_error"}
+    except httpx.HTTPStatusError as exc:
+        code=exc.response.status_code
+        category=("rate_limited" if code==429 else "forbidden" if code in (401,403)
+                  else "server_error" if code>=500 else "http_error")
+        return {**denied,"status":"atomic_rpc_"+category,"rpc_method":stage}
+    except httpx.HTTPError:
+        return {**denied,"status":"atomic_rpc_transport_error","rpc_method":stage}
+    except (ValueError, TypeError, KeyError, IndexError, UnicodeError):
+        return {**denied,"status":"atomic_rpc_decode_error","rpc_method":stage}
 
 async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-beta.solana.com",
                                        transport=None, timeout=25, max_accounts=20000):
