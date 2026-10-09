@@ -22,7 +22,7 @@ def known_chain_kill(d):
 def evaluate_chain(d):
     if d.get("chain")=="solana" and (d.get("solana_wallet_rpc_status")!="ok" or d.get("top_wallet_percent") is None):
         return False,"solana_owner_unverified"
-    tw=d.get("top_wallet_percent")
+    # Missing mandatory CHAIN facts cannot be treated as an approval.\n    required=("holder_count","top_wallet_percent","top_10_percent","is_honeypot","mint_authority","freeze_authority")\n    if any(d.get(field) is None for field in required):return False,"missing_chain_evidence"\n    tw=d.get("top_wallet_percent")
     if tw is not None and float(tw)>HARD["max_top_wallet"]:return False,"top_wallet"
     t10=d.get("top_10_percent")
     if t10 is not None and float(t10)/100>HARD["max_top_10"]:return False,"top_10"
