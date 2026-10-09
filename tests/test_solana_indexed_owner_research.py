@@ -11,7 +11,7 @@ def run(pages, **kwargs):
         body=json.loads(request.content)
         calls.append(body)
         page=body["params"]["page"]
-        return httpx.Response(200,json={"result":{"token_accounts":pages.get(page,[])}})
+        return httpx.Response(200,json={"result":{"token_accounts":pages.get(page,[]), "total":sum(len(v) for v in pages.values()), "last_indexed_slot":12345}})
     result=asyncio.run(collect_indexed_owner_research(MINT,api_key="test-key",
         page_size=2,transport=httpx.MockTransport(handler),**kwargs))
     return result,calls
@@ -42,6 +42,13 @@ class IndexedResearchTests(unittest.TestCase):
     def test_cap_is_fail_closed(self):
         r,_=run({1:[account("a","o",1),account("b","o",1)]},max_pages=1)
         self.assertEqual(r["status"],"page_cap_reached")
+        self.assertFalse(r["chain_pass_allowed"])
+    def test_missing_index_metadata_fails_closed(self):
+        def handler(request):
+            return httpx.Response(200,json={"result":{"token_accounts":[]}})
+        r=asyncio.run(collect_indexed_owner_research(MINT,api_key="test",
+            transport=httpx.MockTransport(handler)))
+        self.assertEqual(r["status"],"missing_index_metadata")
         self.assertFalse(r["chain_pass_allowed"])
     def test_requires_key(self):
         r=asyncio.run(collect_indexed_owner_research(MINT,api_key=""))
