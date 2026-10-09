@@ -16,7 +16,7 @@ async def collect_cursor_owner_research(mint, *, api_key, program=TOKEN_PROGRAM,
             "source":"helius_rpc_v2_research"}
     if not isinstance(mint,str) or not mint or not isinstance(api_key,str) or not api_key or program not in (TOKEN_PROGRAM,TOKEN_2022):
         return {**denied,"status":"invalid_input"}
-    if type(max_pages) is not int or not 1<=max_pages<=100 or type(page_size) is not int or not 1<=page_size<=1000 or type(max_bytes) is not int or max_bytes<1000:
+    if type(max_pages) is not int or not 1<=max_pages<=100 or type(page_size) is not int or not 1<=page_size<=10000 or type(max_bytes) is not int or max_bytes<1000:
         return {**denied,"status":"invalid_input"}
     cursor=None
     seen_accounts=set()
