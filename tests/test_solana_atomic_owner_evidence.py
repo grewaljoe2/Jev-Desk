@@ -28,7 +28,7 @@ def token_value(amount=100):
     return {"owner":TOKEN_PROGRAM,"data":b64(raw)}
 
 class AtomicOwnerTests(unittest.TestCase):
-    def run_case(self,amount=100,accounts=1,missing_account=False):
+    def run_case(self,amount=100,accounts=1,missing_account=False,atomic_slot=102):
         def handler(request):
             call=json.loads(request.content)
             method=call["method"]
@@ -37,7 +37,7 @@ class AtomicOwnerTests(unittest.TestCase):
             elif method=="getProgramAccounts":
                 result={"context":{"slot":101},"value":[{"pubkey":ACCOUNT,"account":{}} for _ in range(accounts)]}
             elif method=="getMultipleAccounts":
-                result={"context":{"slot":102},"value":[mint_value(),None if missing_account else token_value(amount)]}
+                result={"context":{"slot":atomic_slot},"value":[mint_value(),None if missing_account else token_value(amount)]}
             else:
                 raise AssertionError(method)
             return httpx.Response(200,json={"jsonrpc":"2.0","id":1,"result":result})
@@ -57,6 +57,11 @@ class AtomicOwnerTests(unittest.TestCase):
     def test_discovered_account_missing_fails_closed(self):
         result=self.run_case(missing_account=True)
         self.assertEqual(result["status"],"discovered_account_missing")
+        self.assertFalse(result["chain_pass_allowed"])
+
+    def test_stale_atomic_slot_fails_closed(self):
+        result=self.run_case(atomic_slot=100)
+        self.assertEqual(result["status"],"invalid_atomic_response")
         self.assertFalse(result["chain_pass_allowed"])
 
     def test_atomic_account_limit(self):
