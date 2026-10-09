@@ -71,3 +71,9 @@ These are synthetic counterexamples, **not proof of a functioning verifier**. Re
 - Commit `9a6263d` requires `cross_provider_same_slot=True`, integer primary snapshot slot, and equal primary/secondary snapshot slots at the `SavipChainProvider` acceptance boundary; protects against forged/incomplete correlation result.
 - Commit `445cb31` adds five mocked provider-boundary tests (positive control and four fail-closed scenarios). **Tests committed, not executed in this turn.**
 - This still does not prove actual RPC completeness or atomicity. No production release approval.
+
+## Cross-provider and CHAIN boundary offline execution (2026-10-09)
+- Executed reconstructed local versions of `tests/test_solana_independent_owner_slots.py` and `tests/test_solana_provider_owner_boundary.py` with Python `unittest`: **3/3 + 5/5 passed**.
+- First attempt failed at import because local decoder reconstruction lacked `SUPPORTED`; resolved by removing unused imports from local testing shim (no GitHub source change), then reran successfully.
+- **Provenance caveat:** locally simplified copies of pipeline/provider functions were used, not exact GitHub module bytes. Therefore this validates the slot-check logic in isolation, not the actual full application import graph or integration. CI remains unverified.
+- Combined earlier mocked collector tests: 13/13 passed separately. No owner snapshot certification, no production merge or deploy.
