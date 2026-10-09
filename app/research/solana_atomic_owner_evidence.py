@@ -1,7 +1,7 @@
 """Bounded atomic Solana mint + token-account snapshot, research-only.
 
 Discover account addresses first, then read mint and token accounts in
-bounded getMultipleAccounts batches. Every batch MUST report the same slot. Never infer completeness merely from
+bounded getMultipleAccounts batches. Every batch MUST report the same slot.\nNever infer completeness merely from
 discovery; conservation against the mint supply at that same response slot
 is mandatory. This path intentionally does not authorize production CHAIN.
 """
