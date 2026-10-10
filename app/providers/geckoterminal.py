@@ -47,7 +47,7 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
                 s=self._snapshot(network,row)
                 if not s:continue
                 gate=self._discovery_gate(s)
-                if gate is None:out.append(s)
+                out.append(s)
                 if network=="solana" and s.age_minutes is not None:
                     from app.research.savip_liquidity_experiment import compare_liquidity_gate
                     comparison=compare_liquidity_gate(s.model_dump())
