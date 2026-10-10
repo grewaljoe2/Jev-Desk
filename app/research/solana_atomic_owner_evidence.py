@@ -33,7 +33,16 @@ def token2022_mint_extension_ids(raw):
             return None
         ids.append(kind)
         offset+=size
+    if len(set(ids))!=len(ids):
+        return None
     return tuple(ids)
+
+
+METADATA_ONLY_MINT_EXTENSIONS=frozenset((18,19))
+
+def permitted_metadata_only_mint(raw):
+    ids=token2022_mint_extension_ids(raw)
+    return ids is not None and frozenset(ids)==METADATA_ONLY_MINT_EXTENSIONS and len(ids)==2
 
 
 class RpcRejected(Exception):
@@ -67,10 +76,10 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             if not isinstance(mint_account,dict) or mint_account.get("owner") not in SUPPORTED:
                 return {**denied,"status":"invalid_mint"}
             program=mint_account["owner"]
-            # Token-2022 base-layout mints only: extensions may change
-            # accounting semantics and require separate audited proof.
+            # Only exact metadata-pointer + token-metadata mints may continue.
+            # Any other extension or malformed TLV remains unverified.
             mint_raw_initial=base64.b64decode(mint_account["data"][0],validate=True)
-            if program==TOKEN_2022 and len(mint_raw_initial)!=82:
+            if program==TOKEN_2022 and len(mint_raw_initial)!=82 and not permitted_metadata_only_mint(mint_raw_initial):
                 ids=token2022_mint_extension_ids(mint_raw_initial)
                 return {**denied,"status":"token_2022_extensions_unverified",
                         "mint_extension_ids":list(ids) if ids is not None else None}
@@ -121,7 +130,8 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                 return {**denied,"status":"mint_program_changed"}
             mint_data=decode_mint_account(values[0],program=program)
             mint_raw=base64.b64decode(values[0]["data"][0],validate=True)
-            if program==TOKEN_2022 and len(mint_raw)!=82:
+            if program==TOKEN_2022 and (not (len(mint_raw)==82 or permitted_metadata_only_mint(mint_raw))
+                or token2022_mint_extension_ids(mint_raw)!=token2022_mint_extension_ids(mint_raw_initial)):
                 return {**denied,"status":"token_2022_extensions_unverified"}
             # SPL COption discriminants must be exactly 0 (None) or 1 (Some).
             # Malformed values must never be interpreted as revoked authorities.
@@ -147,6 +157,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                     "atomic_snapshot_slot":slot,"discovered_accounts":len(addresses),
                     "mint_authority":mint_authority_open,"freeze_authority":freeze_authority_open,
                     "owner_balance_digest":outcome.get("owner_balance_digest"),
+                    "mint_extension_ids":list(token2022_mint_extension_ids(mint_raw)) if program==TOKEN_2022 else [],
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
     except RpcRejected as exc:
         return {**denied,"status":"atomic_rpc_"+str(exc),"rpc_method":stage}
