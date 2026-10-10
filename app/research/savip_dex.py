@@ -13,9 +13,9 @@ class SavipDexWorker:
         for candidate in pool:
             by_network.setdefault(candidate["chain"],[]).append(candidate)
         targets=[]
-        while len(targets)<25 and any(by_network.values()):
+        while len(targets)<12 and any(by_network.values()):
             for network in ("solana","bsc","base","eth"):
-                if by_network.get(network) and len(targets)<25:
+                if by_network.get(network) and len(targets)<12:
                     targets.append(by_network[network].pop(0))
             for network in sorted(set(by_network)-{"solana","bsc","base","eth"}):
                 if by_network[network] and len(targets)<25:
@@ -54,7 +54,7 @@ class SavipDexWorker:
                         break
                 except Exception as e:
                     self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
-                await asyncio.sleep(3.0)
+                await asyncio.sleep(5.0)
             if rate_limited:break
         if self.on_enriched:await self.on_enriched()
     async def loop(self):
