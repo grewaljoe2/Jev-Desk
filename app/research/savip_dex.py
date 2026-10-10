@@ -39,7 +39,7 @@ class SavipDexWorker:
                     facts_list=await self.provider.fetch_pairs(chain,[row["pool_id"] for row in batch])
                     if len(facts_list)!=len(batch):raise RuntimeError("dex_batch_count_mismatch")
                     for row,facts in zip(batch,facts_list):
-                        if facts:
+                        if facts and facts.get("pair_found") is True and all(facts.get(k) is not None for k in ("trades_m5","buys_m5","sells_m5","volume_m5_usd")):
                             await log_savip_dex(row["token_id"],row["payload_json"],facts)
                             self.last_enriched+=1
                 except httpx.HTTPStatusError as e:
