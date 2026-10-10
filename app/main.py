@@ -357,9 +357,9 @@ function renderSavipMetrics(s){
 }
 function updateSavipAgents(s){
  const eligibility=(s.chain_cut||{}).eligibility||{};
- const values=[s.scanned??0,s.free_cut_survivor_count??0,s.trade_cut_survivor_count??0,(s.chain_cut||{}).checked_last_cycle??0,(s.jev_state||{}).checked_last_cycle??0,0];
+ const values=[s.scanned,s.free_cut_survivor_count,s.trade_cut_survivor_count,(s.chain_cut||{}).checked_last_cycle,(s.jev_state||{}).checked_last_cycle,0];
  const ids=['Discovery','Free','Trade','Chain','Jev','Pick'];
- ids.forEach((name,i)=>{const el=document.getElementById('agent'+name),counter=document.getElementById('agent'+name+'Count');if(counter)counter.textContent=String(values[i]);if(el)el.classList.toggle('active',Number(values[i])>0)});
+ ids.forEach((name,i)=>{const el=document.getElementById('agent'+name),counter=document.getElementById('agent'+name+'Count');if(counter)counter.textContent=values[i]===null||values[i]===undefined?'—':String(values[i]);if(el)el.classList.toggle('active',Number(values[i])>0)});
  const st=document.getElementById('agentStatus');if(st)st.textContent=values[1]===0?'No FREE CUT survivors in current launch cohort.':values[2]===0?'FREE CUT candidates observed; awaiting 5m trade verification.':'Trade candidates observed; CHAIN and Jev must independently verify before shadow entry.';
 }
 async function refreshSavipJournal(){
