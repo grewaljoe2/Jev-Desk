@@ -58,11 +58,11 @@ async def schedule_outcomes(token_id,observed_at,baseline_event_id=None,force=Fa
         for h in (HORIZONS if horizons is None else tuple(horizons)):
             await db.execute("INSERT INTO outcome_jobs(token_id,horizon_minutes,due_at,status,timing_provenance,baseline_event_id) VALUES(%s,%s,%s,'pending','clean_v061',%s) ON CONFLICT DO NOTHING",(token_id,h,observed_at+timedelta(minutes=h),baseline_event_id))
 async def savip_dex_targets(limit=25):
-    """Old-enough fresh Savip candidates needing DEX facts; bounded by published 25/cycle cap."""
+    """Fresh 0–15m Savip candidates needing 5m DEX facts; bounded by 25/cycle cap."""
     if not settings.database_url:return []
     import psycopg
     from psycopg.rows import dict_row
-    from app.strategy.reference_thresholds import HARD
+    from app.strategy.reference_thresholds import EARLY_LAUNCH
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("""WITH c AS (
           SELECT DISTINCT ON(token_id) token_id,created_at,payload_json
@@ -75,11 +75,10 @@ async def savip_dex_targets(limit=25):
             THEN EXTRACT(EPOCH FROM (NOW()-COALESCE(payload_json->'raw'->>'pool_created_at',payload_json->>'pool_created_at')::timestamptz))/60.0
             ELSE NULLIF(payload_json->>'age_minutes','')::double precision
           END BETWEEN %s AND %s
-          AND NULLIF(payload_json->>'volume_h24_usd','')::double precision >= %s
           AND NULLIF(payload_json->>'mcap_usd','')::double precision BETWEEN %s AND %s
           AND (NULLIF(payload_json->>'liquidity_usd','')::double precision IS NULL OR NULLIF(payload_json->>'liquidity_usd','')::double precision >= %s)
           AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=c.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '15 minutes')
-        ORDER BY created_at LIMIT %s""",(HARD["min_age_minutes"],HARD["max_age_hours"]*60,HARD["min_volume_h24"],HARD["min_mcap_usd"],HARD["max_mcap_usd"],HARD["min_liquidity_usd"],limit))
+        ORDER BY created_at LIMIT %s""",(EARLY_LAUNCH["min_age_minutes"],EARLY_LAUNCH["max_age_minutes"],EARLY_LAUNCH["min_mcap_usd"],EARLY_LAUNCH["max_mcap_usd"],EARLY_LAUNCH["min_liquidity_usd"],limit))
         return await cur.fetchall()
 
 async def log_savip_dex(token_id,base_payload,dex):
