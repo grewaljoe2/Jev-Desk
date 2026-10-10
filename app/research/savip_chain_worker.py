@@ -26,6 +26,13 @@ class SavipChainWorker:
             await self._evaluate_cycle()
         finally:
             self.cycle_running=False;self.cycle_finished_at=datetime.now(timezone.utc).isoformat()
+            # Sanitized operational heartbeat: no addresses, balances, or credentials.
+            import logging
+            logging.getLogger(__name__).info(
+                "SAVIP_CHAIN_HEALTH checked=%d passed=%d eligibility=%s kills=%s error=%s",
+                self.last_checked,self.last_passed,self.last_eligibility,
+                self.last_kills,self.last_error,
+            )
     async def _evaluate_cycle(self):
         if await open_savip_positions():
             self.last_eligibility={"blocked_by_open_position":True}
