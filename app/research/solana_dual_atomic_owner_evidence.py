@@ -37,8 +37,10 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
         return {**denied,"status":"cross_provider_slot_gap"}
     required=("owner_balance_digest","supply_amount","holder_count","top_10_percent",
               "largest_owner_fraction","mint_authority","freeze_authority")
-    if any(first.get(k)!=second.get(k) for k in required):
-        return {**denied,"status":"cross_provider_atomic_mismatch"}
+    mismatched_fields=[k for k in required if first.get(k)!=second.get(k)]
+    if mismatched_fields:
+        return {**denied,"status":"cross_provider_atomic_mismatch",
+                "mismatched_fields":mismatched_fields}
     if not first.get("owner_balance_digest") or type(first.get("supply_amount")) is not int or first["supply_amount"]<=0:
         return {**denied,"status":"missing_owner_digest"}
     # Evidence is sufficient for a bounded classic-SPL shadow eligibility
