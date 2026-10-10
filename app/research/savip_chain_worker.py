@@ -19,9 +19,6 @@ class SavipChainWorker:
             await self._run_cycle_locked()
     async def _run_cycle_locked(self):
         self.last_checked=0;self.last_passed=0;self.last_kills={};self.last_error=None;self.last_candidate_results=[];self.last_eligibility={}
-        # Bound the opt-in atomic probe to one candidate per cycle, not one
-        # candidate for the entire uptime of a long-running cloud worker.
-        self._atomic_canary_used=False
         self.cycle_started_at=datetime.now(timezone.utc).isoformat();self.cycle_running=True
         try:
             await self._evaluate_cycle()
@@ -86,8 +83,7 @@ class SavipChainWorker:
                         continue
                     d["solana_wallet_rpc_status"]="pending"
                     try:
-                        use_canary=(settings.solana_atomic_canary_enabled
-                                    and not getattr(self,"_atomic_canary_used",False))
+                        use_canary=settings.solana_atomic_canary_enabled
                         # The independent canary does not require the optional
                         # preliminary lower-bound RPC, which may be rate-limited.
                         verifier_path="atomic_canary" if use_canary else "legacy_independent"
@@ -101,11 +97,9 @@ class SavipChainWorker:
                             if classify_account_lower_bound(lower)=="reject":
                                 d["solana_account_lower_bound_risk"] = True
                                 d["solana_largest_account_fraction"] = lower
-                            if (settings.solana_atomic_canary_enabled
-                                and not getattr(self,"_atomic_canary_used",False)):
-                                # The canary is a single bounded alternative, not an
-                                # additional scan after the legacy expensive collector.
-                                self._atomic_canary_used=True
+                            if use_canary:
+                                # Use the same independently checked atomic path for
+                                # every bounded candidate; never fall back to legacy.
                                 verified=await self.sol_chain.fetch_atomic_shadow_owner_evidence(address)
                             else:
                                 verified=await self.sol_chain.fetch_independent_owner_evidence(address)
@@ -122,7 +116,7 @@ class SavipChainWorker:
                                 d["solana_owner_primary_status"]=verified.get("primary_status")
                                 d["solana_owner_secondary_status"]=verified.get("secondary_status")
                                 d["solana_owner_failed_provider"]=verified.get("failed_provider")
-                                evidence_details={key:verified.get(key) for key in ("status","primary_status","primary_rpc_method","secondary_status","failed_provider","mismatched_fields","mint_extension_ids","source") if verified.get(key) is not None}
+                                evidence_details={key:verified.get(key) for key in ("status","primary_status","primary_rpc_method","secondary_status","failed_provider","mismatched_fields","mint_extension_ids","slot_diagnostics","source") if verified.get(key) is not None}
                                 # Helius can supply bounded candidate diagnostics when public
                                 # providers cannot attest a complete wallet map. Its
                                 # multi-slot cursor scan is NEVER accepted as a CHAIN pass.
