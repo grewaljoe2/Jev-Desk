@@ -166,6 +166,34 @@ async def savip_chain_visibility_endpoint(hours:int=72):
     return {"ok":True,**result,"real_execution_enabled":False}
 
 
+@app.get("/savip-operational-health")
+async def savip_operational_health():
+    """Read-only sanitized worker heartbeat, without token IDs or provider secrets."""
+    from datetime import datetime, timezone
+    chain = savip_chain_worker
+    return {
+        "ok": True,
+        "shadow_only": True,
+        "real_execution_enabled": False,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "chain": {
+            "cycle_started_at": chain.cycle_started_at,
+            "cycle_finished_at": chain.cycle_finished_at,
+            "cycle_running": chain.cycle_running,
+            "interval_seconds": chain.seconds,
+            "checked_last_cycle": chain.last_checked,
+            "passed_last_cycle": chain.last_passed,
+            "eligibility": chain.last_eligibility,
+            "kill_counts": chain.last_kills,
+            "last_error": chain.last_error,
+        },
+        "jev": {
+            "checked_last_cycle": savip_jev_worker.last_checked,
+            "passed_last_cycle": savip_jev_worker.last_passed,
+            "last_error": savip_jev_worker.last_error,
+        },
+    }
+
 @app.get("/savip-pipeline-diagnostics")
 async def savip_pipeline_diagnostics():
     """Small read-only status endpoint: actual worker states, persisted outcomes, and pending queue."""
