@@ -37,8 +37,8 @@ class SavipChainWorker:
         if await open_savip_positions():
             self.last_eligibility={"blocked_by_open_position":True}
             return
-        # Match the audited 72h cohort; provider calls remain capped by self.cap.
-        funnel=await savip_candidate_pool(window_minutes=72*60,limit=10000)
+        # Match the active 15-minute launch cohort; provider calls remain capped by self.cap.
+        funnel=await savip_candidate_pool(window_minutes=15,limit=10000)
         trade=await exact_trade_cut(funnel["free_cut_survivors"])
         if time.monotonic()<self._next_dossier_retry_at:
             self.last_eligibility={"trade_survivors":len(trade["survivors"]),"dossier_cooldown":True}
@@ -53,7 +53,7 @@ class SavipChainWorker:
             "in_memory_cooldown_skips":sum(row["token_id"] not in persisted_recent and row["token_id"] in self._recent_tokens for row in trade["survivors"]),
             "fresh_candidates":len(fresh)}
         # Prioritize freshest qualified pools within the existing shared GT pacing budget.
-        fresh.sort(key=lambda row: (float(row.get("age_minutes") or 1e12),row.get("token_id") or ""))
+        fresh.sort(key=lambda row: (float(row["age_minutes"]) if row.get("age_minutes") is not None else 1e12,row.get("token_id") or ""))
         eligible=[row for row in fresh if row.get("chain")!="solana" or not self.sol_chain.cooling_down()]
         # Favor checks that do not depend on the constrained public Solana RPC.
         # Retain youngest-first priority within each network group.

@@ -3,7 +3,7 @@ from email.utils import parsedate_to_datetime
 from datetime import datetime,timezone
 from app.providers.base import DiscoveryProvider
 from app.core.models import TokenSnapshot
-from app.strategy.reference_thresholds import HARD
+from app.strategy.reference_thresholds import EARLY_LAUNCH
 
 class GeckoTerminalDiscovery(DiscoveryProvider):
     BASE="https://api.geckoterminal.com/api/v2"; NETWORKS=("solana","eth","base","bsc")
@@ -75,12 +75,12 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         self.last_diagnostics=diag;return out
     @staticmethod
     def _discovery_gate(s):
+        # Savip active 0–15m profile; do not prefilter newborn pools with
+        # frozen historical 24h volume or 60-minute age requirements.
         if s.age_minutes is None:return "missing_age"
-        if s.age_minutes<HARD["min_age_minutes"]:return "too_young"
-        if s.age_minutes>HARD["max_age_hours"]*60:return "too_old"
-        if s.liquidity_usd is None or s.liquidity_usd<HARD["min_liquidity_usd"]:return "liquidity"
-        if s.volume_h24_usd is None or s.volume_h24_usd<HARD["min_volume_h24"]:return "volume"
-        if s.mcap_usd is None or not HARD["min_mcap_usd"]<=s.mcap_usd<=HARD["max_mcap_usd"]:return "market_cap"
+        if not EARLY_LAUNCH["min_age_minutes"]<=s.age_minutes<=EARLY_LAUNCH["max_age_minutes"]:return "age"
+        if s.liquidity_usd is None or s.liquidity_usd<EARLY_LAUNCH["min_liquidity_usd"]:return "liquidity"
+        if s.mcap_usd is None or not EARLY_LAUNCH["min_mcap_usd"]<=s.mcap_usd<=EARLY_LAUNCH["max_mcap_usd"]:return "market_cap"
         return None
     async def fetch_pools(self,network,pool_ids):
         """Fetch up to 30 same-network pools in one public API request."""
