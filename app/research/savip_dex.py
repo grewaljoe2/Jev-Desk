@@ -4,13 +4,12 @@ from app.storage.db import log_savip_dex
 from app.research.savip_targets import savip_dex_targets_72h
 
 class SavipDexWorker:
-    def __init__(self,provider,seconds=180,on_enriched=None):
-        self.provider=provider;self.seconds=seconds;self.on_enriched=on_enriched;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
+    def __init__(self,provider,seconds=180,on_enriched=None,gecko_provider=None):
+        self.provider=provider;self.gecko_provider=gecko_provider;self.seconds=seconds;self.on_enriched=on_enriched;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
     async def run_cycle(self):
         self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
-        if self.provider._cooldown_until>__import__("time").monotonic():
-            self.last_error="dex_cooldown"
-            return
+        dex_cooling=self.provider._cooldown_until>__import__("time").monotonic()
+        if dex_cooling:self.last_error="dex_cooldown"
         pool=await savip_dex_targets_72h(100)
         by_network={}
         for candidate in pool:
@@ -36,7 +35,10 @@ class SavipDexWorker:
                 self.last_checked+=len(batch)
                 remaining-=len(batch)
                 try:
-                    facts_list=await self.provider.fetch_pairs(chain,[row["pool_id"] for row in batch])
+                    if dex_cooling and self.gecko_provider:
+                        facts_list=await self.gecko_provider.fetch_trade_facts(chain,[row["pool_id"] for row in batch])
+                    else:
+                        facts_list=await self.provider.fetch_pairs(chain,[row["pool_id"] for row in batch])
                     if len(facts_list)!=len(batch):raise RuntimeError("dex_batch_count_mismatch")
                     for row,facts in zip(batch,facts_list):
                         if facts and facts.get("pair_found") is True and all(facts.get(k) is not None for k in ("trades_m5","buys_m5","sells_m5","volume_m5_usd")):
@@ -46,6 +48,15 @@ class SavipDexWorker:
                     self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
                     if e.response.status_code==429:
                         self.last_rate_limited+=1
+                        if self.gecko_provider and not dex_cooling:
+                            try:
+                                fallback=await self.gecko_provider.fetch_trade_facts(chain,[row["pool_id"] for row in batch])
+                                for row,facts in zip(batch,fallback):
+                                    if facts and all(facts.get(k) is not None for k in ("trades_m5","buys_m5","sells_m5","volume_m5_usd")):
+                                        await log_savip_dex(row["token_id"],row["payload_json"],facts)
+                                        self.last_enriched+=1
+                            except Exception as fallback_error:
+                                self.last_error+=f"; gecko_fallback: {type(fallback_error).__name__}"
                         self.last_skipped_due_to_429=remaining
                         rate_limited=True
                         break
