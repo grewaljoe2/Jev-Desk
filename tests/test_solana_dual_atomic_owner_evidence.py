@@ -40,5 +40,24 @@ class DualAtomicTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"],"secondary_unverified")
         self.assertFalse(result["chain_pass_allowed"])
 
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_full_sliced_snapshot")
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_atomic_small_mint")
+    async def test_token_2022_limit_does_not_use_classic_fallback(self,collect,sliced):
+        collect.return_value={"status":"atomic_account_limit","token_program":"token_2022"}
+        result=await compare_atomic_owner_snapshots("mint")
+        self.assertEqual(result["status"],"primary_unverified")
+        self.assertFalse(result["chain_pass_allowed"])
+        sliced.assert_not_called()
+
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_full_sliced_snapshot")
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_atomic_small_mint")
+    async def test_classic_limit_uses_classic_fallback(self,collect,sliced):
+        collect.return_value={"status":"atomic_account_limit","token_program":"classic_spl"}
+        sliced.side_effect=[dict(BASE),{**BASE,"atomic_snapshot_slot":101}]
+        result=await compare_atomic_owner_snapshots("mint")
+        self.assertEqual(result["status"],"atomic_independently_correlated_research")
+        self.assertFalse(result["chain_pass_allowed"])
+        self.assertEqual(sliced.await_count,2)
+
 if __name__=="__main__":
     unittest.main()

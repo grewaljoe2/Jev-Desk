@@ -17,12 +17,12 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
     if primary_rpc==secondary_rpc:
         return {**denied,"status":"same_provider"}
     first=await collect_atomic_small_mint(mint,rpc_url=primary_rpc,transport=transport)
-    if first.get("status") in ("atomic_account_limit","atomic_rpc_response_too_large"):
+    if first.get("status") in ("atomic_account_limit","atomic_rpc_response_too_large") and first.get("token_program") != "token_2022":
         first=await collect_full_sliced_snapshot(mint,rpc_url=primary_rpc,transport=transport)
     if first.get("positive_balance_coverage_proven") is not True:
         return {**denied,"status":"primary_unverified","primary_status":first.get("status"),"primary_rpc_method":first.get("rpc_method"),"mint_extension_ids":first.get("mint_extension_ids")}
     second=await collect_atomic_small_mint(mint,rpc_url=secondary_rpc,transport=transport)
-    if second.get("status") in ("atomic_account_limit","atomic_rpc_response_too_large"):
+    if second.get("status") in ("atomic_account_limit","atomic_rpc_response_too_large") and second.get("token_program") != "token_2022":
         second=await collect_full_sliced_snapshot(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("status")=="full_snapshot_rpc_rate_limited":
         # One delayed, bounded retry on public secondary RPC; still fail closed.
