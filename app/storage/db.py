@@ -99,7 +99,7 @@ async def savip_candidate_pool(window_minutes=15,limit=1000):
     if not settings.database_url:return {"scanned":0,"free_cut_survivors":[],"wait_too_young":[],"kills":{},"missing_fields":{}}
     import psycopg
     from psycopg.rows import dict_row
-    from app.strategy.reference_thresholds import HARD
+    from app.strategy.reference_thresholds import EARLY_LAUNCH
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("""WITH candidates AS (
           SELECT DISTINCT ON (e.token_id)
@@ -137,35 +137,25 @@ async def savip_candidate_pool(window_minutes=15,limit=1000):
     for r in rows:
         x=dict(r);age=x.get("age_minutes");liq=x.get("liquidity_usd");vol=x.get("volume_h24_usd");mc=x.get("mcap_usd")
         reason=None
-        # Published FREE CUT order: age -> liquidity -> 24h volume -> market cap.
+        # Early launch FREE CUT order: age -> liquidity -> market cap.
         # Missing facts fail closed only when their gate is actually reached.
         if age is None:
             reason="missing_free_fact";missing["age_minutes"]=missing.get("age_minutes",0)+1;x["missing_free_fields"]=["age_minutes"]
-        elif age<HARD["min_age_minutes"]:reason="wait_too_young"
-        elif age>HARD["max_age_hours"]*60:reason="too_old"
+        elif age<0:reason="invalid_age"
+        elif age>EARLY_LAUNCH["max_age_minutes"]:reason="too_old"
         elif liq is None:
             reason="missing_free_fact";missing["liquidity_usd"]=missing.get("liquidity_usd",0)+1;x["missing_free_fields"]=["liquidity_usd"]
-        elif liq<HARD["min_liquidity_usd"]:reason="liquidity"
-        elif vol is None:
-            reason="missing_free_fact";missing["volume_h24_usd"]=missing.get("volume_h24_usd",0)+1;x["missing_free_fields"]=["volume_h24_usd"]
-        elif vol<HARD["min_volume_h24"]:reason="volume"
+        elif liq<EARLY_LAUNCH["min_liquidity_usd"]:reason="liquidity"
         elif mc is None:
             reason="missing_free_fact";missing["mcap_usd"]=missing.get("mcap_usd",0)+1;x["missing_free_fields"]=["mcap_usd"]
-        elif mc<HARD["min_mcap_usd"]:reason="mcap_low"
-        elif mc>HARD["max_mcap_usd"]:reason="mcap_high"
+        elif mc<EARLY_LAUNCH["min_mcap_usd"]:reason="mcap_low"
+        elif mc>EARLY_LAUNCH["max_mcap_usd"]:reason="mcap_high"
         if reason=="wait_too_young":wait.append(x)
         elif reason:kills[reason]=kills.get(reason,0)+1
         else:
             survivors.append(x)
-            th=x.get("trades_h24");bh=x.get("buys_h1");sh=x.get("sells_h1")
-            absent_trade=[k for k,v in (("trades_h24",th),("buys_h1",bh),("sells_h1",sh)) if v is None]
-            if absent_trade:
-                trade_kills["missing_trade_fact"]=trade_kills.get("missing_trade_fact",0)+1
-                for k in absent_trade:trade_missing[k]=trade_missing.get(k,0)+1
-                x["missing_trade_fields"]=absent_trade
-            elif th<HARD["min_trades_h24"]:trade_kills["trades"]=trade_kills.get("trades",0)+1
-            elif sh==0 and bh>20:trade_kills["no_sells"]=trade_kills.get("no_sells",0)+1
-            else:trade_survivors.append(x)
+            # DEX 5-minute activity is verified by exact_trade_cut after enrichment.
+
     return {"scanned":len(rows),"free_cut_survivors":survivors,"wait_too_young":wait,"kills":kills,"missing_fields":missing,"trade_cut_survivors":trade_survivors,"trade_cut_kills":trade_kills,"trade_cut_missing_fields":trade_missing}
 
 async def open_shadow_position(snapshot,baseline_event_id,notional_usd=100.0):

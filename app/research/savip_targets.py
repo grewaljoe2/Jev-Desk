@@ -1,6 +1,6 @@
 """Savip reference DEX target selection. Shadow research only."""
 from app.core.config import settings
-from app.strategy.reference_thresholds import HARD
+from app.strategy.reference_thresholds import EARLY_LAUNCH
 
 async def savip_dex_targets_72h(limit=25):
     if not settings.database_url:
@@ -26,10 +26,9 @@ async def savip_dex_targets_72h(limit=25):
             THEN EXTRACT(EPOCH FROM (NOW()-COALESCE(o.payload_json->'raw'->>'pool_created_at',o.payload_json->>'pool_created_at')::timestamptz))/60.0
             ELSE NULLIF(o.payload_json->>'age_minutes','')::double precision
           END BETWEEN %s AND %s
-          AND NULLIF(o.payload_json->>'volume_h24_usd','')::double precision >= %s
           AND NULLIF(o.payload_json->>'mcap_usd','')::double precision BETWEEN %s AND %s
           AND NULLIF(o.payload_json->>'liquidity_usd','')::double precision >= %s
           AND COALESCE(o.payload_json->'raw'->>'pool_id',d.payload_json->'raw'->>'pool_id') IS NOT NULL
           AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '15 minutes')
-        ORDER BY CASE WHEN EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX') THEN 1 ELSE 0 END ASC, d.created_at DESC LIMIT %s""",(HARD["min_age_minutes"],HARD["max_age_hours"]*60,HARD["min_volume_h24"],HARD["min_mcap_usd"],HARD["max_mcap_usd"],HARD["min_liquidity_usd"],limit))
+        ORDER BY CASE WHEN EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX') THEN 1 ELSE 0 END ASC, d.created_at DESC LIMIT %s""",(EARLY_LAUNCH["min_age_minutes"],EARLY_LAUNCH["max_age_minutes"],EARLY_LAUNCH["min_mcap_usd"],EARLY_LAUNCH["max_mcap_usd"],EARLY_LAUNCH["min_liquidity_usd"],limit))
         return await cur.fetchall()
