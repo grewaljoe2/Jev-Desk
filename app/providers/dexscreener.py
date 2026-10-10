@@ -1,6 +1,8 @@
 import httpx
 import asyncio
 import time
+from email.utils import parsedate_to_datetime
+from datetime import datetime,timezone
 
 class DexScreenerProvider:
     BASE="https://api.dexscreener.com/latest/dex/pairs"
@@ -19,9 +21,16 @@ class DexScreenerProvider:
             delay=self._next_at-time.monotonic()
             if delay>0:await asyncio.sleep(delay)
             response=await self._client.get(url)
-            self._next_at=time.monotonic()+1.0
+            self._next_at=time.monotonic()+2.5
             if response.status_code==429:
-                self._cooldown_until=time.monotonic()+60.0
+                retry_after=90.0
+                raw=response.headers.get("Retry-After")
+                if raw:
+                    try: retry_after=max(retry_after,float(raw))
+                    except ValueError:
+                        try: retry_after=max(retry_after,(parsedate_to_datetime(raw)-datetime.now(timezone.utc)).total_seconds())
+                        except Exception: pass
+                self._cooldown_until=time.monotonic()+max(1.0,retry_after)
             response.raise_for_status()
             return response
     async def fetch_pairs(self,chain,pool_ids):
