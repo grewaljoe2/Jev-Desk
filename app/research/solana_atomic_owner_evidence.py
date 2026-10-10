@@ -11,6 +11,30 @@ import httpx
 from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, TOKEN_2022, decode_mint_account, decode_token_account
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
 
+def token2022_mint_extension_ids(raw):
+    """Read bounded TLV type IDs only; never certify extension safety."""
+    if not isinstance(raw,bytes) or len(raw)<82:
+        return None
+    if len(raw)==82:
+        return ()
+    # Token-2022 mint extension region begins with account-type byte.
+    if len(raw)<83 or raw[82]!=1:
+        return None
+    offset=83
+    ids=[]
+    while offset<len(raw):
+        if len(raw)-offset<4:
+            return None
+        kind=int.from_bytes(raw[offset:offset+2],"little")
+        size=int.from_bytes(raw[offset+2:offset+4],"little")
+        offset+=4
+        if kind==0 or offset+size>len(raw) or len(ids)>=32:
+            return None
+        ids.append(kind)
+        offset+=size
+    return tuple(ids)
+
+
 class RpcRejected(Exception):
     """Sanitized JSON-RPC rejection category, never raw provider data."""
     pass
@@ -46,7 +70,9 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             # accounting semantics and require separate audited proof.
             mint_raw_initial=base64.b64decode(mint_account["data"][0],validate=True)
             if program==TOKEN_2022 and len(mint_raw_initial)!=82:
-                return {**denied,"status":"token_2022_extensions_unverified"}
+                ids=token2022_mint_extension_ids(mint_raw_initial)
+                return {**denied,"status":"token_2022_extensions_unverified",
+                        "mint_extension_ids":list(ids) if ids is not None else None}
             filters=[{"memcmp":{"offset":0,"bytes":mint}}]
             # Token-2022 accounts can carry extensions; do not filter by
             # size because excluding them would fake supply completeness.
