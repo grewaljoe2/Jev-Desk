@@ -10,7 +10,7 @@ async def savip_dex_targets_72h(limit=25):
     async with await psycopg.AsyncConnection.connect(settings.database_url,row_factory=dict_row) as db:
         cur=await db.execute("""WITH c AS (
           SELECT DISTINCT ON(token_id) token_id,created_at,payload_json
-          FROM events WHERE event_type='DISCOVERY' AND created_at>=NOW()-interval '72 hours'
+          FROM events WHERE event_type='DISCOVERY' AND created_at>=NOW()-interval '15 minutes'
           ORDER BY token_id,created_at DESC
         )
         SELECT d.token_id,o.payload_json->>'chain' chain,
