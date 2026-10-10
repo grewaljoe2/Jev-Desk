@@ -97,7 +97,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             if type(discovery_slot) is not int or discovery_slot<0:
                 return {**denied,"status":"invalid_discovery_slot"}
             if not isinstance(accounts,list) or len(accounts)>299:
-                return {**denied,"status":"atomic_account_limit"}
+                return {**denied,"status":"atomic_account_limit","token_program":"token_2022" if program==TOKEN_2022 else "classic_spl"}
             addresses=[item.get("pubkey") for item in accounts if isinstance(item,dict)]
             if len(addresses)!=len(accounts) or any(not isinstance(a,str) or not a for a in addresses) or len(set(addresses))!=len(addresses):
                 return {**denied,"status":"invalid_discovery"}
@@ -148,7 +148,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                 if program==TOKEN_2022:
                     raw_account=base64.b64decode(value["data"][0],validate=True)
                     if len(raw_account)!=165:
-                        return {**denied,"status":"token_2022_account_extensions_unverified"}
+                        return {**denied,"status":"token_2022_account_extensions_unverified","token_program":"token_2022"}
                 rows.append(decode_token_account({"pubkey":address,"account":value},mint=mint,program=program,slot=slot))
             snapshot={"slot":slot,"rows":rows,"owner_coverage_complete":False}
             outcome=reconcile_owner_balances(snapshot,mint=mint,program=program,
@@ -160,7 +160,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                     "mint_extension_ids":list(token2022_mint_extension_ids(mint_raw)) if program==TOKEN_2022 else [],
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
     except RpcRejected as exc:
-        return {**denied,"status":"atomic_rpc_"+str(exc),"rpc_method":stage}
+        return {**denied,"status":"atomic_rpc_"+str(exc),"rpc_method":stage,"token_program":"token_2022" if locals().get("program")==TOKEN_2022 else "classic_spl" if locals().get("program")==TOKEN_PROGRAM else "unknown"}
     except httpx.HTTPStatusError as exc:
         code=exc.response.status_code
         category=("rate_limited" if code==429 else "forbidden" if code in (401,403)
