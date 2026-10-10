@@ -96,8 +96,10 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             discovery_slot=(discovery.get("context") or {}).get("slot")
             if type(discovery_slot) is not int or discovery_slot<0:
                 return {**denied,"status":"invalid_discovery_slot"}
-            if not isinstance(accounts,list) or len(accounts)>299:
-                return {**denied,"status":"atomic_account_limit","token_program":"token_2022" if program==TOKEN_2022 else "classic_spl"}
+            if not isinstance(accounts,list):
+                return {**denied,"status":"invalid_discovery_accounts"}
+            if len(accounts)>299:
+                return {**denied,"status":"atomic_account_limit","token_program":"token_2022" if program==TOKEN_2022 else "classic_spl","discovered_accounts":len(accounts)}
             addresses=[item.get("pubkey") for item in accounts if isinstance(item,dict)]
             if len(addresses)!=len(accounts) or any(not isinstance(a,str) or not a for a in addresses) or len(set(addresses))!=len(addresses):
                 return {**denied,"status":"invalid_discovery"}
