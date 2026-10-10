@@ -35,11 +35,12 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
         network=self.DISCOVERY_SEQUENCE[self._discovery_index%len(self.DISCOVERY_SEQUENCE)]
         slot=self._discovery_index%len(self.DISCOVERY_SEQUENCE)
         self._discovery_index+=1
-        source="trending_pools"
+        # Fresh launches need page-one new-pool coverage; trending pages provide breadth.
+        source="new_pools" if slot in (0,1,2,3,4,5) else "trending_pools"
         if network=="solana":
-            source=("trending_pools","new_pools","trending_pools","new_pools")[self._solana_source_index%4]
+            source=("new_pools","new_pools","trending_pools","new_pools")[self._solana_source_index%4]
             self._solana_source_index+=1
-        page=1+(self._discovery_index//len(self.DISCOVERY_SEQUENCE))%3
+        page=1 if source=="new_pools" else 1+(self._discovery_index//len(self.DISCOVERY_SEQUENCE))%3
         out=[];research=[];diag={"page":page,"mode":"mixed_trending_new_pools_v1","source":source,"network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
         try:
             r=await self._get(f"{self.BASE}/networks/{network}/{source}",params={"page":page,"include":"dex,base_token,quote_token"});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
