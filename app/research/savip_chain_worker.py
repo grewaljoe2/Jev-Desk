@@ -1,5 +1,6 @@
 """Bounded Savip dossier/CHAIN worker. Shadow research only."""
 import asyncio
+import logging
 import time
 from datetime import datetime, timezone
 from app.research.savip_trade_cut import exact_trade_cut
@@ -27,8 +28,7 @@ class SavipChainWorker:
         finally:
             self.cycle_running=False;self.cycle_finished_at=datetime.now(timezone.utc).isoformat()
             # Sanitized operational heartbeat: no addresses, balances, or credentials.
-            import logging
-            logging.getLogger(__name__).info(
+            logging.getLogger("uvicorn.error").info(
                 "SAVIP_CHAIN_HEALTH checked=%d passed=%d eligibility=%s kills=%s error=%s",
                 self.last_checked,self.last_passed,self.last_eligibility,
                 self.last_kills,self.last_error,
@@ -200,7 +200,9 @@ class SavipChainWorker:
     async def loop(self):
         while True:
             try:await self.run_cycle()
-            except Exception as e:self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+            except Exception as e:
+                self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
+                logging.getLogger("uvicorn.error").exception("SAVIP_CHAIN_CYCLE_FAILURE")
             await asyncio.sleep(self.seconds)
     def start(self):
         if not self.task:self.task=asyncio.create_task(self.loop())
