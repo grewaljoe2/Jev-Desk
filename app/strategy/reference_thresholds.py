@@ -1,9 +1,9 @@
 """Frozen published Savip/Jev desk reference values. Shadow research only."""
 SAVIP_REFERENCE_VERSION="2026-09-23"
 HARD={
- "min_age_minutes":0,"max_age_hours":0.25,
- "min_liquidity_usd":10000,"min_volume_h24":40000,
- "min_mcap_usd":30000,"max_mcap_usd":8000000,
+ "min_age_minutes":60,"max_age_hours":72,
+ "min_liquidity_usd":25000,"min_volume_h24":40000,
+ "min_mcap_usd":60000,"max_mcap_usd":8000000,
  "min_trades_h24":150,"max_top_wallet":0.05,
  "max_top_10":0.60,"min_holders":80,
 }
@@ -34,3 +34,6 @@ BENCH_MINUTES={
 DEFAULT_BENCH_MINUTES=45
 REJECT_SHAPES={"fading","one_buyer"}
 REJECT_SELL_SIDE={"flagged","suspicious"}
+
+# Active Savip launch cohort. Historical HARD values remain frozen for research.
+EARLY_LAUNCH={"min_age_minutes":0,"max_age_minutes":15,"min_liquidity_usd":10000,"min_mcap_usd":30000,"max_mcap_usd":8000000,"min_volume_m5_usd":3000,"min_trades_m5":20,"min_buys_m5":10,"min_sells_m5":2}
