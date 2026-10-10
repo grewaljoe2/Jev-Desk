@@ -110,7 +110,7 @@ class SavipChainProvider:
             or type(result.get("secondary_snapshot_slot")) is not int):
             return {"owner_coverage_complete":False,"status":result.get("status","atomic_unverified"),
                     "primary_status":result.get("primary_status"),
-                    "primary_rpc_method":result.get("primary_rpc_method"),"mint_extension_ids":result.get("mint_extension_ids"),"mismatched_fields":result.get("mismatched_fields"),
+                    "primary_rpc_method":result.get("primary_rpc_method"),"slot_diagnostics":result.get("slot_diagnostics"),"mint_extension_ids":result.get("mint_extension_ids"),"mismatched_fields":result.get("mismatched_fields"),
                     "secondary_status":result.get("secondary_status"),
                     "failed_provider":("primary" if result.get("status")=="primary_unverified" else
                                        "secondary" if result.get("status")=="secondary_unverified" else None)}
