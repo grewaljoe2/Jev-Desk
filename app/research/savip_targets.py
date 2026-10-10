@@ -1,4 +1,8 @@
-"""Savip reference DEX target selection. Shadow research only."""
+"""Savip reference DEX target selection. Shadow research only.
+
+Reobserve eligible pools at most once per three minutes; prioritize pools
+without any prior DEX observation before refreshing previously observed pools.
+"""
 from app.core.config import settings
 from app.strategy.reference_thresholds import EARLY_LAUNCH
 
