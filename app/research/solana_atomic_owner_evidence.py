@@ -195,6 +195,7 @@ async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-bet
         if not isinstance(body,dict) or not isinstance(body.get("result"),dict):
             raise ValueError("invalid_rpc")
         return body["result"]
+    last_slots=None
     try:
         async with httpx.AsyncClient(timeout=timeout,transport=transport) as client:
             for _ in range(3):
@@ -222,6 +223,7 @@ async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-bet
                 after_slot=(after.get("context") or {}).get("slot")
                 if (type(before_slot) is not int or type(after_slot) is not int
                     or not (before_slot<=slot<=after_slot)):
+                    last_slots={"mint_before_slot":before_slot,"accounts_slot":slot,"mint_after_slot":after_slot}
                     continue
                 after_value=after.get("value")
                 after_mint=decode_mint_account(after_value,program=TOKEN_PROGRAM)
@@ -240,7 +242,7 @@ async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-bet
                         "mint_authority":False,
                         "freeze_authority":int.from_bytes(after_raw[46:50],"little")==1,
                         "chain_pass_allowed":False,"owner_coverage_complete":False}
-            return {**denied,"status":"full_snapshot_slot_mismatch"}
+            return {**denied,"status":"full_snapshot_slot_mismatch","slot_diagnostics":last_slots}
     except RpcRejected as exc:
         return {**denied,"status":"full_snapshot_rpc_"+str(exc)}
     except httpx.HTTPStatusError as exc:
