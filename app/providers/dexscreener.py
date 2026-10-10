@@ -39,6 +39,8 @@ class DexScreenerProvider:
                 self._consecutive_429=0
             response.raise_for_status()
             return response
+    def diagnostics(self):
+        return {"cooldown_remaining_seconds":round(max(0.0,self._cooldown_until-time.monotonic()),1),"consecutive_429":self._consecutive_429,"last_http_status":self._last_http_status}
     async def fetch_pairs(self,chain,pool_ids):
         """One chain-specific request for up to 20 exact pair addresses."""
         cid=self.CHAIN.get(chain)
