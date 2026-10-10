@@ -34,14 +34,15 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             self.last_diagnostics={"skipped":"entry_pressure"};return []
         network=self.DISCOVERY_SEQUENCE[self._discovery_index%len(self.DISCOVERY_SEQUENCE)]
         slot=self._discovery_index%len(self.DISCOVERY_SEQUENCE)
-        self._discovery_index=(self._discovery_index+1)%len(self.DISCOVERY_SEQUENCE)
+        self._discovery_index+=1
         source="trending_pools"
         if network=="solana":
             source=("trending_pools","new_pools","trending_pools","new_pools")[self._solana_source_index%4]
             self._solana_source_index+=1
-        out=[];research=[];diag={"mode":"mixed_trending_new_pools_v1","source":source,"network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
+        page=1+(self._discovery_index//len(self.DISCOVERY_SEQUENCE))%3
+        out=[];research=[];diag={"page":page,"mode":"mixed_trending_new_pools_v1","source":source,"network":network,"slot":slot,"sequence_length":len(self.DISCOVERY_SEQUENCE)}
         try:
-            r=await self._get(f"{self.BASE}/networks/{network}/{source}",params={"page":1,"include":"dex,base_token,quote_token"});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
+            r=await self._get(f"{self.BASE}/networks/{network}/{source}",params={"page":page,"include":"dex,base_token,quote_token"});diag.update({"http":r.status_code,"bytes":len(r.content)});r.raise_for_status()
             rows=r.json().get("data",[]);diag["rows"]=len(rows)
             for row in rows[:20]:
                 s=self._snapshot(network,row)
