@@ -341,14 +341,23 @@ async function refresh(){
  try{
   const r=await fetch('/savip-shadow-data',{cache:'no-store'});
   if(!r.ok)throw new Error('Savip unavailable');
-  const s=await r.json();
-  const storage=document.getElementById('storage');
-  if(storage)storage.textContent='Savip shadow ledger';
- }catch(e){const storage=document.getElementById('storage');if(storage)storage.textContent='Savip connection unavailable';}
+  renderSavipMetrics(await r.json());
+ }catch(e){const el=document.getElementById('agentStatus');if(el)el.textContent='Savip metrics unavailable · last observed values retained';}
+}
+function renderSavipMetrics(s){
+ const put=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=String(value??'—')};
+ put('svscan',s.scanned);put('svfree',s.free_cut_survivor_count);put('svwait',s.wait_too_young_count);put('svcap',s.dossier_cap_per_cycle);
+ put('svtrade',s.trade_cut_enabled?'ON':'OFF');put('svdossier',s.dossier_enabled?'ON':'OFF');put('svjev',s.jev_enabled?'ON · waiting':'OFF · not configured');put('svpick',s.pick_enabled?'ON · waiting':'OFF');
+ const kills=s.kills||{},missing=s.missing_fields||{};
+ put('svkills','FREE CUT rejected: '+(Object.entries(kills).map(([k,v])=>k+' '+v).join(' · ')||'none')+' · Missing: '+(Object.entries(missing).map(([k,v])=>k+' '+v).join(' · ')||'none'));
+ const survivors=document.getElementById('svsurvivors');
+ if(survivors){survivors.replaceChildren();const list=s.free_cut_survivors||[];if(!list.length)survivors.textContent='No qualifying tokens in current 15m cohort.';else for(const item of list){const row=document.createElement('div');row.className='row';const id=String(item.token_id||'');row.textContent=id.split(':')[0].toUpperCase()+' · '+id.split(':').pop().slice(0,7)+'… · $'+Math.round(Number(item.liquidity_usd||0)).toLocaleString()+' liquidity';survivors.append(row)}}
+ const trades=document.getElementById('svtrades');if(trades){trades.replaceChildren();const list=s.savip_trades||[];if(!list.length)trades.textContent='No Savip shadow trades yet.';else for(const t of list){const row=document.createElement('div');row.className='row';row.textContent=String(t.token_id||'shadow position')+' · '+String(t.status||'unknown');trades.append(row)}}
+ updateSavipAgents(s);
 }
 function updateSavipAgents(s){
  const eligibility=(s.chain_cut||{}).eligibility||{};
- const values=[s.scanned_count??s.scanned??0,s.free_cut_survivor_count??0,eligibility.trade_survivors??0,(s.chain_cut||{}).checked_last_cycle??0,(s.jev||{}).checked_last_cycle??0,(s.pick||{}).checked_last_cycle??0];
+ const values=[s.scanned??0,s.free_cut_survivor_count??0,s.trade_cut_survivor_count??0,(s.chain_cut||{}).checked_last_cycle??0,(s.jev_state||{}).checked_last_cycle??0,0];
  const ids=['Discovery','Free','Trade','Chain','Jev','Pick'];
  ids.forEach((name,i)=>{const el=document.getElementById('agent'+name),counter=document.getElementById('agent'+name+'Count');if(counter)counter.textContent=String(values[i]);if(el)el.classList.toggle('active',Number(values[i])>0)});
  const st=document.getElementById('agentStatus');if(st)st.textContent=values[1]===0?'No FREE CUT survivors in current launch cohort.':values[2]===0?'FREE CUT candidates observed; awaiting 5m trade verification.':'Trade candidates observed; CHAIN and Jev must independently verify before shadow entry.';
@@ -358,7 +367,7 @@ async function refreshSavipJournal(){
  try{
   const [er,sr]=await Promise.all([fetch('/events?limit=500',{cache:'no-store'}),fetch('/savip-shadow-data',{cache:'no-store'})]);
   if(!er.ok||!sr.ok)throw new Error('journal unavailable');
-  const events=await er.json(),state=await sr.json(),elig=(state.chain_cut||{}).eligibility||{};updateSavipAgents(state);
+  const events=await er.json(),state=await sr.json(),elig=(state.chain_cut||{}).eligibility||{};renderSavipMetrics(state);
   queue.textContent='FREE (15m): '+(state.free_cut_survivor_count||0)+' · TRADE: '+(elig.trade_survivors??'—')+' · Fresh CHAIN: '+(elig.fresh_candidates??'—')+' · 24h checked: '+(elig.persisted_recent_skips??'—')+' · Selected: '+(elig.selected_for_checks??'—');
   journal.replaceChildren();
   const rows=(Array.isArray(events)?events:[]).filter(e=>e&&(/^(DISCOVERY|SAVIP_|JEV_|PICK|SHADOW)/.test(String(e.event_type||'')))).slice(0,60);
