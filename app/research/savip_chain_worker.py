@@ -122,7 +122,7 @@ class SavipChainWorker:
                                 d["solana_owner_primary_status"]=verified.get("primary_status")
                                 d["solana_owner_secondary_status"]=verified.get("secondary_status")
                                 d["solana_owner_failed_provider"]=verified.get("failed_provider")
-                                evidence_details={key:verified.get(key) for key in ("status","primary_status","primary_rpc_method","secondary_status","failed_provider","mismatched_fields","source") if verified.get(key) is not None}
+                                evidence_details={key:verified.get(key) for key in ("status","primary_status","primary_rpc_method","secondary_status","failed_provider","mismatched_fields","mint_extension_ids","source") if verified.get(key) is not None}
                                 # Helius can supply bounded candidate diagnostics when public
                                 # providers cannot attest a complete wallet map. Its
                                 # multi-slot cursor scan is NEVER accepted as a CHAIN pass.
