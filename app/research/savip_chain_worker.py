@@ -95,14 +95,12 @@ class SavipChainWorker:
                             else await self.sol_chain.fetch("solana",address))
                         if sf:
                             lower=sf.get("largest_token_account_fraction")
+                            # These two RPC observations are not proven to share a
+                            # snapshot. Record the risk signal, but never persist a
+                            # terminal concentration kill from unsynchronized data.
                             if classify_account_lower_bound(lower)=="reject":
-                                d["solana_largest_account_fraction"]=lower
-                                d["solana_wallet_rpc_status"]="account_lower_bound_reject"
-                                await self._persist(row["token_id"],d,False,"top_wallet_lower_bound")
-                                self.last_kills["top_wallet_lower_bound"]=self.last_kills.get("top_wallet_lower_bound",0)+1
-                                self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"kill","reason":"top_wallet_lower_bound"})
-                                self._recent_tokens[row["token_id"]]=time.monotonic()+900.0
-                                continue
+                                d["solana_account_lower_bound_risk"] = True
+                                d["solana_largest_account_fraction"] = lower
                             if (settings.solana_atomic_canary_enabled
                                 and not getattr(self,"_atomic_canary_used",False)):
                                 # The canary is a single bounded alternative, not an
