@@ -17,10 +17,11 @@ def token2022_mint_extension_ids(raw):
         return None
     if len(raw)==82:
         return ()
-    # Token-2022 mint extension region begins with account-type byte.
-    if len(raw)<83 or raw[82]!=1:
+    # Extended mint layout: 82-byte mint, 83-byte padding to the
+    # 165-byte account boundary, then account-type byte (Mint=1), then TLV.
+    if len(raw)<166 or any(raw[82:165]) or raw[165]!=1:
         return None
-    offset=83
+    offset=166
     ids=[]
     while offset<len(raw):
         if len(raw)-offset<4:
