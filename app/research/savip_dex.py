@@ -5,9 +5,9 @@ from app.research.savip_targets import savip_dex_targets_72h
 
 class SavipDexWorker:
     def __init__(self,provider,seconds=180,on_enriched=None,gecko_provider=None):
-        self.provider=provider;self.gecko_provider=gecko_provider;self.seconds=seconds;self.on_enriched=on_enriched;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
+        self.provider=provider;self.gecko_provider=gecko_provider;self.seconds=seconds;self.on_enriched=on_enriched;self.task=None;self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0;self.source_counts={};self.source_observations=[];self.fallback_errors=[]
     async def run_cycle(self):
-        self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0
+        self.last_checked=0;self.last_enriched=0;self.last_error=None;self.last_rate_limited=0;self.last_skipped_due_to_429=0;self.source_counts={};self.source_observations=[];self.fallback_errors=[]
         dex_cooling=self.provider._cooldown_until>__import__("time").monotonic()
         if dex_cooling:self.last_error="dex_cooldown"
         pool=await savip_dex_targets_72h(100)
@@ -44,6 +44,9 @@ class SavipDexWorker:
                         if facts and facts.get("pair_found") is True and all(facts.get(k) is not None for k in ("trades_m5","buys_m5","sells_m5","volume_m5_usd")):
                             await log_savip_dex(row["token_id"],row["payload_json"],facts)
                             self.last_enriched+=1
+                            source=facts.get('source') or ('geckoterminal' if dex_cooling else 'dexscreener')
+                            self.source_counts[source]=self.source_counts.get(source,0)+1
+                            self.source_observations.append({'token_id':row['token_id'],'pool_id':row['pool_id'],'source':source})
                 except httpx.HTTPStatusError as e:
                     self.last_error=f"{type(e).__name__}: {str(e)[:160]}"
                     if e.response.status_code==429:
@@ -55,8 +58,11 @@ class SavipDexWorker:
                                     if facts and all(facts.get(k) is not None for k in ("trades_m5","buys_m5","sells_m5","volume_m5_usd")):
                                         await log_savip_dex(row["token_id"],row["payload_json"],facts)
                                         self.last_enriched+=1
+                                        self.source_counts['geckoterminal']=self.source_counts.get('geckoterminal',0)+1
+                                        self.source_observations.append({'token_id':row['token_id'],'pool_id':row['pool_id'],'source':'geckoterminal'})
                             except Exception as fallback_error:
                                 self.last_error+=f"; gecko_fallback: {type(fallback_error).__name__}"
+                                self.fallback_errors.append({"chain":chain,"error":f"{type(fallback_error).__name__}: {str(fallback_error)[:120]}"})
                         self.last_skipped_due_to_429=remaining
                         rate_limited=True
                         break
