@@ -12,6 +12,8 @@ class DexScreenerProvider:
         self._lock=asyncio.Lock()
         self._next_at=0.0
         self._cooldown_until=0.0
+        self._consecutive_429=0
+        self._last_http_status=None
     async def _request(self,url):
         if time.monotonic()<self._cooldown_until:
             raise RuntimeError("dex_cooldown")
@@ -22,8 +24,10 @@ class DexScreenerProvider:
             if delay>0:await asyncio.sleep(delay)
             response=await self._client.get(url)
             self._next_at=time.monotonic()+2.5
+            self._last_http_status=response.status_code
             if response.status_code==429:
-                retry_after=90.0
+                self._consecutive_429+=1
+                retry_after=min(3600.0,300.0*2**min(self._consecutive_429-1,4))
                 raw=response.headers.get("Retry-After")
                 if raw:
                     try: retry_after=max(retry_after,float(raw))
@@ -31,6 +35,8 @@ class DexScreenerProvider:
                         try: retry_after=max(retry_after,(parsedate_to_datetime(raw)-datetime.now(timezone.utc)).total_seconds())
                         except Exception: pass
                 self._cooldown_until=time.monotonic()+max(1.0,retry_after)
+            elif response.is_success:
+                self._consecutive_429=0
             response.raise_for_status()
             return response
     async def fetch_pairs(self,chain,pool_ids):
