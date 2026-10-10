@@ -147,7 +147,10 @@ class SavipChainWorker:
                     evidence_status=str(d.get("solana_owner_evidence_status") or d.get("solana_wallet_rpc_status") or "unknown")
                     provider_status=d.get("solana_owner_primary_status") if d.get("solana_owner_failed_provider")=="primary" else d.get("solana_owner_secondary_status")
                     if provider_status:evidence_status+=" / "+str(d.get("solana_owner_failed_provider"))+":"+str(provider_status)
-                    raise RuntimeError("solana_wallet_check_pending_unverified: "+evidence_status[:80])
+                    extension_ids=evidence_details.get("mint_extension_ids")
+                    if isinstance(extension_ids,list) and len(extension_ids)<=32 and all(type(x) is int and 0<x<65536 for x in extension_ids):
+                        evidence_status+=" / mint_ext_ids="+",".join(str(x) for x in extension_ids)
+                    raise RuntimeError("solana_wallet_check_pending_unverified: "+evidence_status[:240])
                 ok,reason=evaluate_chain(d)
                 await self._persist(row["token_id"],d,ok,reason)
                 self.last_candidate_results.append({"token_id":row["token_id"],"outcome":"pass" if ok else "kill","reason":reason,"missing_chain_fields":missing,"top_10_percent":d.get("top_10_percent"),"holder_count":d.get("holder_count"),"top_wallet_percent":d.get("top_wallet_percent"),"top_10_limit_percent":60.0,"dossier_source":d.get("source")})
