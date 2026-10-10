@@ -137,7 +137,7 @@ async def savip_candidate_pool(window_minutes=15,limit=1000):
     for r in rows:
         x=dict(r);age=x.get("age_minutes");liq=x.get("liquidity_usd");vol=x.get("volume_h24_usd");mc=x.get("mcap_usd")
         reason=None
-        # Published FREE CUT order: age -> liquidity -> 24h volume -> market cap.
+        # Early launch FREE CUT order: age -> liquidity -> market cap.
         # Missing facts fail closed only when their gate is actually reached.
         if age is None:
             reason="missing_free_fact";missing["age_minutes"]=missing.get("age_minutes",0)+1;x["missing_free_fields"]=["age_minutes"]
@@ -146,9 +146,6 @@ async def savip_candidate_pool(window_minutes=15,limit=1000):
         elif liq is None:
             reason="missing_free_fact";missing["liquidity_usd"]=missing.get("liquidity_usd",0)+1;x["missing_free_fields"]=["liquidity_usd"]
         elif liq<EARLY_LAUNCH["min_liquidity_usd"]:reason="liquidity"
-        elif vol is None:
-            reason="missing_free_fact";missing["volume_h24_usd"]=missing.get("volume_h24_usd",0)+1;x["missing_free_fields"]=["volume_h24_usd"]
-        
         elif mc is None:
             reason="missing_free_fact";missing["mcap_usd"]=missing.get("mcap_usd",0)+1;x["missing_free_fields"]=["mcap_usd"]
         elif mc<EARLY_LAUNCH["min_mcap_usd"]:reason="mcap_low"
