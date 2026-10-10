@@ -124,7 +124,12 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                 if slot is None:
                     slot=batch_slot
                 elif slot!=batch_slot:
-                    return {**denied,"status":"multi_batch_slot_mismatch"}
+                    return {**denied,"status":"multi_batch_slot_mismatch",
+                            "token_program":"token_2022" if program==TOKEN_2022 else "classic_spl",
+                            "slot_diagnostics":{"discovery_slot":discovery_slot,
+                                                "first_batch_slot":slot,
+                                                "mismatched_batch_slot":batch_slot,
+                                                "batch_count":len(batches)}}
                 values.extend(batch_values)
             if not isinstance(values[0],dict) or values[0].get("owner")!=program:
                 return {**denied,"status":"mint_program_changed"}

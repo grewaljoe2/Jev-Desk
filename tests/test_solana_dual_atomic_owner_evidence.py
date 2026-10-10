@@ -59,5 +59,31 @@ class DualAtomicTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["chain_pass_allowed"])
         self.assertEqual(sliced.await_count,2)
 
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_full_sliced_snapshot")
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_atomic_small_mint")
+    async def test_classic_multibatch_mismatch_uses_verified_sliced_fallback(self,collect,sliced):
+        collect.return_value={"status":"multi_batch_slot_mismatch","token_program":"classic_spl"}
+        sliced.side_effect=[dict(BASE),{**BASE,"atomic_snapshot_slot":101}]
+        result=await compare_atomic_owner_snapshots("mint")
+        self.assertEqual(result["status"],"atomic_independently_correlated_research")
+        self.assertEqual(sliced.await_count,2)
+
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_full_sliced_snapshot")
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_atomic_small_mint")
+    async def test_token2022_multibatch_mismatch_never_uses_classic_fallback(self,collect,sliced):
+        collect.return_value={"status":"multi_batch_slot_mismatch","token_program":"token_2022"}
+        result=await compare_atomic_owner_snapshots("mint")
+        self.assertEqual(result["status"],"primary_unverified")
+        sliced.assert_not_called()
+
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_full_sliced_snapshot")
+    @patch("app.research.solana_dual_atomic_owner_evidence.collect_atomic_small_mint")
+    async def test_classic_fallback_unverified_remains_blocked(self,collect,sliced):
+        collect.return_value={"status":"multi_batch_slot_mismatch","token_program":"classic_spl"}
+        sliced.return_value={"status":"full_snapshot_slot_mismatch"}
+        result=await compare_atomic_owner_snapshots("mint")
+        self.assertEqual(result["status"],"primary_unverified")
+        self.assertFalse(result["chain_pass_allowed"])
+
 if __name__=="__main__":
     unittest.main()
