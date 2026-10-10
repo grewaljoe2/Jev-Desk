@@ -14,6 +14,8 @@ class DexScreenerProvider:
         self._cooldown_until=0.0
         self._consecutive_429=0
         self._last_http_status=None
+    def diagnostics(self):
+        return {"cooldown_remaining_seconds":round(max(0.0,self._cooldown_until-time.monotonic()),1),"consecutive_429":self._consecutive_429,"last_http_status":self._last_http_status}
     async def _request(self,url):
         if time.monotonic()<self._cooldown_until:
             raise RuntimeError("dex_cooldown")
