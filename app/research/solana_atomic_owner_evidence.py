@@ -8,7 +8,7 @@ is mandatory. This path intentionally does not authorize production CHAIN.
 import asyncio
 import base64
 import httpx
-from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, decode_mint_account, decode_token_account
+from app.research.solana_rpc_owner_decoder import SUPPORTED, TOKEN_PROGRAM, TOKEN_2022, decode_mint_account, decode_token_account
 from app.research.solana_owner_reconciliation import reconcile_owner_balances
 
 class RpcRejected(Exception):
@@ -42,11 +42,14 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             if not isinstance(mint_account,dict) or mint_account.get("owner") not in SUPPORTED:
                 return {**denied,"status":"invalid_mint"}
             program=mint_account["owner"]
-            # Token-2022 extensions can alter accounting semantics; scope the
-            # first real-token canary to classic SPL until extension-aware proof.
-            if program!=TOKEN_PROGRAM:
-                return {**denied,"status":"token_2022_not_yet_supported"}
+            # Token-2022 base-layout mints only: extensions may change
+            # accounting semantics and require separate audited proof.
+            mint_raw_initial=base64.b64decode(mint_account["data"][0],validate=True)
+            if program==TOKEN_2022 and len(mint_raw_initial)!=82:
+                return {**denied,"status":"token_2022_extensions_unverified"}
             filters=[{"memcmp":{"offset":0,"bytes":mint}}]
+            # Token-2022 accounts can carry extensions; do not filter by
+            # size because excluding them would fake supply completeness.
             if program==TOKEN_PROGRAM:
                 filters.insert(0,{"dataSize":165})
             stage="getProgramAccounts"
@@ -91,6 +94,8 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                 return {**denied,"status":"mint_program_changed"}
             mint_data=decode_mint_account(values[0],program=program)
             mint_raw=base64.b64decode(values[0]["data"][0],validate=True)
+            if program==TOKEN_2022 and len(mint_raw)!=82:
+                return {**denied,"status":"token_2022_extensions_unverified"}
             # SPL COption discriminants must be exactly 0 (None) or 1 (Some).
             # Malformed values must never be interpreted as revoked authorities.
             mint_authority_option=int.from_bytes(mint_raw[0:4],"little")
@@ -103,6 +108,10 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
             for address,value in zip(addresses,values[1:]):
                 if value is None:
                     return {**denied,"status":"discovered_account_missing"}
+                if program==TOKEN_2022:
+                    raw_account=base64.b64decode(value["data"][0],validate=True)
+                    if len(raw_account)!=165:
+                        return {**denied,"status":"token_2022_account_extensions_unverified"}
                 rows.append(decode_token_account({"pubkey":address,"account":value},mint=mint,program=program,slot=slot))
             snapshot={"slot":slot,"rows":rows,"owner_coverage_complete":False}
             outcome=reconcile_owner_balances(snapshot,mint=mint,program=program,
