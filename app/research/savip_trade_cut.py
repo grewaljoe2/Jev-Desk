@@ -23,15 +23,13 @@ async def exact_trade_cut(free_survivors):
         if x.get("pair_found") is False:
             kills["no_pair"]=kills.get("no_pair",0)+1
             continue
-        th=x.get("trades_h24");bh=x.get("buys_h1");sh=x.get("sells_h1")
-        absent=[k for k,v in (("trades_h24",th),("buys_h1",bh),("sells_h1",sh)) if v is None]
+        th=x.get("trades_m5");bh=x.get("buys_m5");sh=x.get("sells_m5");vol=x.get("volume_m5_usd")
+        absent=[k for k,v in (("trades_m5",th),("buys_m5",bh),("sells_m5",sh),("volume_m5_usd",vol)) if v is None]
         if absent:
             kills["missing_trade_fact"]=kills.get("missing_trade_fact",0)+1
             for k in absent:missing[k]=missing.get(k,0)+1
-        elif th<HARD["min_trades_h24"]:
-            kills["trades"]=kills.get("trades",0)+1
-        elif sh==0 and bh>20:
-            kills["no_sells"]=kills.get("no_sells",0)+1
+        elif vol<3000 or th<20 or bh<10 or sh<2:
+            kills["early_activity"]=kills.get("early_activity",0)+1
         else:
             # DEX trade telemetry must never overwrite FREE CUT gated age, liquidity, volume or market cap.
             # Keep the exact source facts used to admit the token and attach DEX facts separately.
