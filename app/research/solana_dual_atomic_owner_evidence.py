@@ -36,7 +36,7 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
         or abs(primary_slot-secondary_slot)>150):
         return {**denied,"status":"cross_provider_slot_gap"}
     required=("owner_balance_digest","supply_amount","holder_count","top_10_percent",
-              "largest_owner_fraction","mint_authority","freeze_authority")
+              "largest_owner_fraction","mint_authority","freeze_authority","mint_extension_ids")
     mismatched_fields=[k for k in required if first.get(k)!=second.get(k)]
     if mismatched_fields:
         return {**denied,"status":"cross_provider_atomic_mismatch",
