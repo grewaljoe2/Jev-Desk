@@ -141,9 +141,11 @@ async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-bet
                                                   "method":method,"params":params})
         response.raise_for_status()
         if len(response.content)>6_000_000:
-            raise ValueError("oversized_response")
+            raise RpcRejected("response_too_large")
         body=response.json()
-        if not isinstance(body,dict) or "error" in body or not isinstance(body.get("result"),dict):
+        if isinstance(body,dict) and "error" in body:
+            raise RpcRejected("provider_rejected")
+        if not isinstance(body,dict) or not isinstance(body.get("result"),dict):
             raise ValueError("invalid_rpc")
         return body["result"]
     try:
@@ -192,5 +194,14 @@ async def collect_full_sliced_snapshot(mint, *, rpc_url="https://api.mainnet-bet
                         "freeze_authority":int.from_bytes(after_raw[46:50],"little")==1,
                         "chain_pass_allowed":False,"owner_coverage_complete":False}
             return {**denied,"status":"full_snapshot_slot_mismatch"}
-    except (httpx.HTTPError,ValueError,TypeError,KeyError,IndexError,UnicodeError):
-        return {**denied,"status":"full_snapshot_rpc_or_decode_error"}
+    except RpcRejected as exc:
+        return {**denied,"status":"full_snapshot_rpc_"+str(exc)}
+    except httpx.HTTPStatusError as exc:
+        code=exc.response.status_code
+        category=("rate_limited" if code==429 else "forbidden" if code in (401,403)
+                  else "server_error" if code>=500 else "http_error")
+        return {**denied,"status":"full_snapshot_rpc_"+category}
+    except httpx.HTTPError:
+        return {**denied,"status":"full_snapshot_rpc_transport_error"}
+    except (ValueError,TypeError,KeyError,IndexError,UnicodeError):
+        return {**denied,"status":"full_snapshot_decode_error"}
