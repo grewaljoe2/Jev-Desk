@@ -1,7 +1,7 @@
 """Savip reference DEX target selection. Shadow research only.
 
-Reobserve eligible pools at most once per three minutes; prioritize pools
-without any prior DEX observation before refreshing previously observed pools.
+Prioritize fresh eligible pools without usable DEX observations. Reobserve
+older samples after three minutes, preserving exact token and pool identity.
 """
 from app.core.config import settings
 from app.strategy.reference_thresholds import EARLY_LAUNCH
@@ -33,6 +33,6 @@ async def savip_dex_targets_72h(limit=25):
           AND NULLIF(o.payload_json->>'mcap_usd','')::double precision BETWEEN %s AND %s
           AND NULLIF(o.payload_json->>'liquidity_usd','')::double precision >= %s
           AND COALESCE(o.payload_json->'raw'->>'pool_id',d.payload_json->'raw'->>'pool_id') IS NOT NULL
-          AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '3 minutes')
-        ORDER BY CASE WHEN EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX') THEN 1 ELSE 0 END ASC, d.created_at DESC LIMIT %s""",(EARLY_LAUNCH["min_age_minutes"],EARLY_LAUNCH["max_age_minutes"],EARLY_LAUNCH["min_mcap_usd"],EARLY_LAUNCH["max_mcap_usd"],EARLY_LAUNCH["min_liquidity_usd"],limit))
+          AND NOT EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX' AND x.created_at>=NOW()-interval '3 minutes' AND x.payload_json->>'pair_found'='true' AND x.payload_json->>'trades_m5' IS NOT NULL AND x.payload_json->>'volume_m5_usd' IS NOT NULL)
+        ORDER BY CASE WHEN EXISTS(SELECT 1 FROM events x WHERE x.token_id=d.token_id AND x.event_type='SAVIP_DEX' AND x.payload_json->>'pair_found'='true' AND x.payload_json->>'trades_m5' IS NOT NULL AND x.payload_json->>'volume_m5_usd' IS NOT NULL) THEN 1 ELSE 0 END ASC, d.created_at DESC LIMIT %s""",(EARLY_LAUNCH["min_age_minutes"],EARLY_LAUNCH["max_age_minutes"],EARLY_LAUNCH["min_mcap_usd"],EARLY_LAUNCH["max_mcap_usd"],EARLY_LAUNCH["min_liquidity_usd"],limit))
         return await cur.fetchall()
