@@ -4,6 +4,7 @@ No exact cross-provider slot match is required: each snapshot has its own
 single-slot mint supply and token account balances. Matching owner digests
 and supply across snapshots are mandatory. Never authorize production CHAIN.
 """
+import asyncio
 from app.research.solana_atomic_owner_evidence import collect_atomic_small_mint, collect_full_sliced_snapshot
 
 async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainnet-beta.solana.com",
@@ -22,6 +23,10 @@ async def compare_atomic_owner_snapshots(mint, *, primary_rpc="https://api.mainn
         return {**denied,"status":"primary_unverified","primary_status":first.get("status"),"primary_rpc_method":first.get("rpc_method")}
     second=await collect_atomic_small_mint(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("status") in ("atomic_account_limit","atomic_rpc_response_too_large"):
+        second=await collect_full_sliced_snapshot(mint,rpc_url=secondary_rpc,transport=transport)
+    if second.get("status")=="full_snapshot_rpc_rate_limited":
+        # One delayed, bounded retry on public secondary RPC; still fail closed.
+        await asyncio.sleep(3)
         second=await collect_full_sliced_snapshot(mint,rpc_url=secondary_rpc,transport=transport)
     if second.get("positive_balance_coverage_proven") is not True:
         return {**denied,"status":"secondary_unverified","secondary_status":second.get("status")}
