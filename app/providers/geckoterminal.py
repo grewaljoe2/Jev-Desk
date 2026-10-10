@@ -96,6 +96,32 @@ class GeckoTerminalDiscovery(DiscoveryProvider):
             snap=self._snapshot(network,row)
             if snap:out[row.get("id")]=snap
         return out
+    async def fetch_trade_facts(self,network,pool_ids):
+        """Fetch exact pool m5 trade facts from GeckoTerminal; never infer absent fields."""
+        ids=[(p or "").split("_",1)[-1] for p in pool_ids]
+        if not ids or len(ids)>20 or any(not p or "," in p or "/" in p for p in ids):
+            raise ValueError("invalid_gecko_trade_batch")
+        r=await self._get(f"{self.BASE}/networks/{network}/pools/multi/{','.join(ids)}")
+        r.raise_for_status()
+        rows=(r.json().get("data") or [])
+        by_address={str((x.get("attributes") or {}).get("address") or x.get("id","").split("_",1)[-1]).lower():x for x in rows}
+        result=[]
+        for address in ids:
+            row=by_address.get(address.lower())
+            if not row:
+                result.append(None);continue
+            a=row.get("attributes") or {}
+            tx=(a.get("transactions") or {}).get("m5") or {}
+            vol=(a.get("volume_usd") or {}).get("m5")
+            buys=tx.get("buys");sells=tx.get("sells")
+            if buys is None or sells is None or vol is None:
+                result.append(None);continue
+            try:
+                b=int(buys);se=int(sells);v=float(vol)
+            except (TypeError,ValueError):
+                result.append(None);continue
+            result.append({"pair_found":True,"pair_address":address,"buys_m5":b,"sells_m5":se,"trades_m5":b+se,"volume_m5_usd":v,"source":"geckoterminal"})
+        return result
     async def fetch_pool(self,network,pool_id):
         pool_address=(pool_id or "").split("_",1)[-1]
         if not pool_address:return None
