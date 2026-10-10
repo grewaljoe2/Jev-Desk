@@ -1,6 +1,6 @@
 """Exact published Savip TRADE CUT evaluation. Shadow only."""
 from app.core.config import settings
-from app.strategy.reference_thresholds import HARD
+from app.strategy.reference_thresholds import EARLY_LAUNCH
 
 async def exact_trade_cut(free_survivors):
     if not free_survivors or not settings.database_url:
@@ -28,7 +28,7 @@ async def exact_trade_cut(free_survivors):
         if absent:
             kills["missing_trade_fact"]=kills.get("missing_trade_fact",0)+1
             for k in absent:missing[k]=missing.get(k,0)+1
-        elif vol<3000 or th<20 or bh<10 or sh<2:
+        elif vol<EARLY_LAUNCH["min_volume_m5_usd"] or th<EARLY_LAUNCH["min_trades_m5"] or bh<EARLY_LAUNCH["min_buys_m5"] or sh<EARLY_LAUNCH["min_sells_m5"]:
             kills["early_activity"]=kills.get("early_activity",0)+1
         else:
             # DEX trade telemetry must never overwrite FREE CUT gated age, liquidity, volume or market cap.
