@@ -157,6 +157,7 @@ async def collect_atomic_small_mint(mint, *, rpc_url="https://api.mainnet-beta.s
                     "atomic_snapshot_slot":slot,"discovered_accounts":len(addresses),
                     "mint_authority":mint_authority_open,"freeze_authority":freeze_authority_open,
                     "owner_balance_digest":outcome.get("owner_balance_digest"),
+                    "mint_extension_ids":list(token2022_mint_extension_ids(mint_raw)) if program==TOKEN_2022 else [],
                     "chain_pass_allowed":False,"owner_coverage_complete":False}
     except RpcRejected as exc:
         return {**denied,"status":"atomic_rpc_"+str(exc),"rpc_method":stage}
