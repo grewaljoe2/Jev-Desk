@@ -276,6 +276,32 @@ async def savip_prechain_network_funnel_endpoint(hours:int=72):
     from app.storage.db import savip_prechain_network_funnel
     return {"ok":True,**(await savip_prechain_network_funnel(hours)),"real_execution_enabled":False}
 
+@app.on_event("startup")
+async def log_sanitized_chain_audit_once():
+    """Emit aggregate, read-only CHAIN audit through the existing Render log integration."""
+    async def emit():
+        await asyncio.sleep(15)
+        try:
+            from collections import Counter
+            from app.storage.db import savip_chain_rejection_audit
+            audit=await savip_chain_rejection_audit(24)
+            if not audit.get("available"):
+                logging.getLogger("uvicorn.error").warning("SAVIP_CHAIN_AUDIT unavailable")
+                return
+            for row in audit.get("chain_decisions",[])[:60]:
+                logging.getLogger("uvicorn.error").info(
+                    "SAVIP_CHAIN_AUDIT network=%s reason=%s passed=%s unique=%s decisions=%s",
+                    str(row.get("network","unknown"))[:24],
+                    str(row.get("reason","unknown"))[:80],
+                    str(row.get("passed","unknown"))[:8],
+                    int(row.get("unique_tokens") or 0),
+                    int(row.get("decisions") or 0),
+                )
+        except Exception as exc:
+            logging.getLogger("uvicorn.error").warning("SAVIP_CHAIN_AUDIT_ERROR type=%s",type(exc).__name__)
+    asyncio.create_task(emit())
+
+
 @app.get("/savip-chain-rejection-audit")
 async def savip_chain_rejection_audit_endpoint(hours:int=72):
     from app.storage.db import savip_chain_rejection_audit
