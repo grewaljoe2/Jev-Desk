@@ -301,7 +301,7 @@ async function refresh(){
 async function refreshSavipJournal(){
  const journal=document.getElementById('svjournal'),queue=document.getElementById('svqueue');
  try{
-  const [er,sr]=await Promise.all([fetch('/events?limit=150',{cache:'no-store'}),fetch('/savip-shadow-data',{cache:'no-store'})]);
+  const [er,sr]=await Promise.all([fetch('/events?limit=500',{cache:'no-store'}),fetch('/savip-shadow-data',{cache:'no-store'})]);
   if(!er.ok||!sr.ok)throw new Error('journal unavailable');
   const events=await er.json(),state=await sr.json(),elig=(state.chain_cut||{}).eligibility||{};
   queue.textContent='FREE (72h): '+(state.free_cut_survivor_count||0)+' · TRADE: '+(elig.trade_survivors??'—')+' · Fresh CHAIN: '+(elig.fresh_candidates??'—')+' · 24h checked: '+(elig.persisted_recent_skips??'—')+' · Selected: '+(elig.selected_for_checks??'—');
@@ -309,13 +309,13 @@ async function refreshSavipJournal(){
   const rows=(Array.isArray(events)?events:[]).filter(e=>e&&(/^(DISCOVERY|SAVIP_|JEV_|PICK|SHADOW)/.test(String(e.event_type||'')))).slice(0,60);
   if(!rows.length){journal.textContent='No pipeline events in recent history.';return}
   for(const e of rows){
-   const p=e.payload_json||{},line=document.createElement('div');line.style.cssText='padding:11px 0;border-bottom:1px solid #252b37';
+   let p=e.payload_json||{};if(typeof p==='string'){try{p=JSON.parse(p)}catch(_){p={}}}if(!p||typeof p!=='object'||Array.isArray(p))p={};const line=document.createElement('div');line.style.cssText='padding:11px 0;border-bottom:1px solid #252b37';
    const heading=document.createElement('div');heading.style.fontWeight='750';
    const id=String(e.token_id||p.token_id||'').split(':').pop();
    heading.textContent=String(e.event_type||'EVENT')+' · '+(id?id.slice(0,6)+'…'+id.slice(-5):'system');
    const detail=document.createElement('div');detail.className='muted note';
-   const ev=p.evidence||{},reason=p.reason||p.status||p.outcome||ev.status||'';
-   detail.textContent=String(e.created_at||'')+' · '+String(reason).slice(0,180)+(ev.mismatched_fields?' · mismatch: '+ev.mismatched_fields.join(', '):'');
+   const ev=(p.evidence&&typeof p.evidence==='object'&&!Array.isArray(p.evidence))?p.evidence:{},reason=p.reason||p.chain_reason||p.status||p.outcome||ev.status||'';
+   detail.textContent=String(e.created_at||'')+' · '+String(reason).slice(0,180)+(Array.isArray(ev.mismatched_fields)?' · mismatch: '+ev.mismatched_fields.map(String).join(', '):'');
    line.append(heading,detail);journal.append(line);
   }
  }catch(err){queue.textContent='Pipeline eligibility unavailable';journal.textContent='Journal unavailable; safety gates unchanged.'}
